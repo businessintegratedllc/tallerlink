@@ -2121,40 +2121,178 @@ ${link}`;
       `;
 
       pub.querySelectorAll('[data-act]').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
           const act = btn.dataset.act;
-          // save decision locally for shop if same browser
+          const status = act === 'approve' ? 'approved' : 'rejected';
+          const decisionKey =
+            data.otId + '_' + (data.type === 'project' ? 'project' : (data.quote?.id || 'quote'));
+
+          btn.disabled = true;
+          const prevText = btn.textContent;
+          btn.textContent = 'Enviando…';
+
+          // 1) Servidor (Netlify Blobs) — para que el taller vea la aprobación en otro dispositivo
+          let serverOk = false;
+          try {
+            const res = await fetch('/.netlify/functions/decision', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                key: decisionKey,
+                status,
+                otId: data.otId,
+                kind: data.type === 'project' ? 'project' : 'quote',
+                quoteId: data.quote?.id || null,
+                plate: data.plate || null,
+                customer: data.customer || null,
+                at: Date.now(),
+              }),
+            });
+            serverOk = res.ok;
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              console.warn('decision API', err);
+            }
+          } catch (e) {
+            console.warn('decision API offline', e);
+          }
+
+          // 2) Mismo navegador que el taller (localStorage) — bonus si es el mismo PC
           try {
             const raw = JSON.parse(localStorage.getItem('tallerlink_v2') || '{}');
             if (Array.isArray(raw.ots)) {
               const ot = raw.ots.find(o => o.id === data.otId);
               if (ot) {
-                if (data.type === 'quote' && data.quote) {
-                  const q = (ot.quotes || []).find(x => x.id === data.quote.id) || ot.quote;
-                  if (q) q.status = act === 'approve' ? 'approved' : 'rejected';
-                  if (ot.quote && ot.quote.id === data.quote.id) ot.quote.status = q.status;
-                  if (act === 'approve') ot.status = 'mecanica';
-                }
-                if (data.type === 'project' && ot.project) {
-                  ot.project.status = act === 'approve' ? 'approved' : 'rejected';
-                  if (act === 'approve') {
-                    ot.status = ot.area === 'pintura' || ot.area === 'enderezado' || ot.area === 'mixto' ? 'enderezado' : 'mecanica';
-                  }
-                }
+                applyDecisionToOt(ot, {
+                  kind: data.type === 'project' ? 'project' : 'quote',
+                  status,
+                  quoteId: data.quote?.id,
+                });
                 localStorage.setItem('tallerlink_v2', JSON.stringify(raw));
               }
             }
             const dec = JSON.parse(localStorage.getItem('tallerlink_decisions') || '{}');
-            dec[data.otId + '_' + (data.quote?.id || data.type)] = { act, at: Date.now() };
+            dec[decisionKey] = { status, act, at: Date.now(), serverOk };
             localStorage.setItem('tallerlink_decisions', JSON.stringify(dec));
           } catch (_) {}
 
-          if (data.type === 'quote' && data.quote) data.quote.status = act === 'approve' ? 'approved' : 'rejected';
-          if (data.type === 'project' && data.project) data.project.status = act === 'approve' ? 'approved' : 'rejected';
+          if (data.type === 'quote' && data.quote) data.quote.status = status;
+          if (data.type === 'project' && data.project) data.project.status = status;
           showPublic(data);
-          toast(act === 'approve' ? '✓ Aprobado · gracias' : 'Respuesta registrada');
+
+          if (serverOk) {
+            toast(act === 'approve' ? '✓ Aprobado · el taller ya puede verlo' : 'Respuesta enviada al taller');
+          } else {
+            toast(act === 'approve'
+              ? '✓ Aprobado en este teléfono. Si el taller no se actualiza, pediles que abran el panel en Netlify (sync).'
+              : 'Registrado aquí. El taller sincroniza al abrir la app en la web desplegada.');
+            btn.disabled = false;
+            btn.textContent = prevText;
+          }
         };
       });
+    }
+
+    /** Aplica una decisión del cliente sobre una OT en memoria */
+    function applyDecisionToOt(ot, { kind, status, quoteId }) {
+      if (!ot) return false;
+      let changed = false;
+      if (kind === 'quote') {
+        const q =
+          (ot.quotes || []).find(x => x.id === quoteId) ||
+          (ot.quote && (!quoteId || ot.quote.id === quoteId) ? ot.quote : null) ||
+          (ot.quotes && ot.quotes[0]) ||
+          ot.quote;
+        if (q && q.status !== status) {
+          q.status = status;
+          if (ot.quote && ot.quote.id === q.id) ot.quote.status = status;
+          changed = true;
+        }
+        if (status === 'approved' && ot.status === 'espera_aprobacion') {
+          ot.status = ot.area === 'pintura' || ot.area === 'enderezado' || ot.area === 'mixto'
+            ? 'enderezado'
+            : 'mecanica';
+          changed = true;
+        }
+      }
+      if (kind === 'project' && ot.project) {
+        if (ot.project.status !== status) {
+          ot.project.status = status;
+          changed = true;
+        }
+        if (status === 'approved' && (ot.status === 'espera_aprobacion' || ot.status === 'diagnostico')) {
+          ot.status = ot.area === 'pintura' || ot.area === 'enderezado' || ot.area === 'mixto'
+            ? 'enderezado'
+            : 'mecanica';
+          changed = true;
+        }
+      }
+      return changed;
+    }
+
+    /**
+     * Baja aprobaciones del servidor y actualiza las OT del taller.
+     * Soluciona: cliente aprueba en su WA/celular ≠ localStorage del taller.
+     */
+    async function syncDecisionsFromServer(opts = {}) {
+      const silent = !!opts.silent;
+      if (!state.ots.length) return 0;
+
+      // Solo OTs que esperan respuesta o recién enviadas
+      const pending = state.ots.filter(o => {
+        const qs = (o.quotes || []).concat(o.quote ? [o.quote] : []);
+        const qWait = qs.some(q => q && (q.status === 'sent' || q.status === 'draft'));
+        const pWait = o.project && (o.project.status === 'sent' || o.project.status === 'draft');
+        return o.status === 'espera_aprobacion' || qWait || pWait;
+      });
+
+      const keys = [];
+      pending.forEach(o => {
+        (o.quotes || []).forEach(q => {
+          if (q && q.id) keys.push(o.id + '_' + q.id);
+        });
+        if (o.quote && o.quote.id) keys.push(o.id + '_' + o.quote.id);
+        keys.push(o.id + '_project');
+      });
+      // unique
+      const uniq = [...new Set(keys)].slice(0, 80);
+      if (!uniq.length) return 0;
+
+      let records = [];
+      try {
+        const res = await fetch(
+          '/.netlify/functions/decision?keys=' + encodeURIComponent(uniq.join(',')),
+          { method: 'GET' }
+        );
+        if (!res.ok) {
+          if (!silent) console.warn('sync decisions HTTP', res.status);
+          return 0;
+        }
+        const data = await res.json();
+        records = data.records || [];
+      } catch (e) {
+        if (!silent) console.warn('sync decisions offline', e);
+        return 0;
+      }
+
+      let changes = 0;
+      records.forEach(rec => {
+        if (!rec || !rec.otId) return;
+        const ot = state.ots.find(o => o.id === rec.otId);
+        if (!ot) return;
+        if (applyDecisionToOt(ot, {
+          kind: rec.kind || 'quote',
+          status: rec.status,
+          quoteId: rec.quoteId,
+        })) changes++;
+      });
+
+      if (changes) {
+        save();
+        refreshAll();
+        if (!silent) toast(changes === 1 ? '1 aprobación nueva del cliente' : changes + ' aprobaciones nuevas');
+      }
+      return changes;
     }
 
     /* ─── init ─── */
@@ -2172,11 +2310,41 @@ ${link}`;
       seedIfEmpty();
       $('#sideShopName').textContent = state.shop.name;
       setView('dashboard');
+
+      // Sincronizar aprobaciones del cliente (otro dispositivo) al abrir y cada 12s
+      syncDecisionsFromServer({ silent: true });
+      setInterval(() => {
+        if (document.hidden) return;
+        syncDecisionsFromServer({ silent: true }).then((n) => {
+          if (n > 0) toast(n === 1 ? 'Cliente respondió una cotización' : n + ' respuestas nuevas');
+        });
+      }, 12000);
+
+      // Botón manual de sync en topbar si existe
+      const top = document.querySelector('.topbar-actions');
+      if (top && !document.getElementById('btnSyncDecisions')) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-ghost btn-sm';
+        b.id = 'btnSyncDecisions';
+        b.textContent = '↻ Sync';
+        b.title = 'Buscar aprobaciones del cliente';
+        b.onclick = async () => {
+          b.disabled = true;
+          b.textContent = '…';
+          const n = await syncDecisionsFromServer({ silent: false });
+          if (!n) toast('Sin cambios nuevos');
+          b.disabled = false;
+          b.textContent = '↻ Sync';
+        };
+        top.prepend(b);
+      }
     }
 
     init();
     window.__tlSetView = setView;
     window.toast = toast;
+    window.syncDecisionsFromServer = syncDecisionsFromServer;
   })();
   </script>
   <script src="/js/billing.js" defer></script>

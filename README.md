@@ -71,16 +71,35 @@ Netlify → Import repo → publish directory `.` → Deploy.
 
 ---
 
+## Plan de negocio y ejecución
+
+- **Plan completo (90 días → 12 meses → $1M):** [`docs/PLAN-COMPLETO.md`](docs/PLAN-COMPLETO.md)
+- **Suscripciones y Stripe:** [`docs/SUSCRIPCIONES.md`](docs/SUSCRIPCIONES.md)
+- **Conectar Stripe paso a paso:** [`docs/STRIPE-SETUP.md`](docs/STRIPE-SETUP.md)
+- **Manual del dueño:** [`docs/MANUAL-DUENO.md`](docs/MANUAL-DUENO.md)
+
+## Aprobaciones del cliente (importante)
+
+Cuando el cliente toca **Aprobar** en el link de WhatsApp, la decisión se guarda en el servidor (Netlify Blobs) y el panel del taller se actualiza solo (cada ~12s o botón **↻ Sync**).
+
+Requiere la app **deployada en Netlify** (no solo abrir el HTML en el disco).
+
 ## Estructura
 
 ```
 tallerlink/
-├── index.html       # App completa del dueño + vista cliente
+├── index.html              # App dueño + vista cliente
+├── js/billing.js           # Registro, planes, límites, Stripe
+├── netlify/functions/      # Checkout, portal, webhook
 ├── package.json
 ├── netlify.toml
 ├── README.md
 └── docs/
+    ├── PLAN-COMPLETO.md
+    ├── SUSCRIPCIONES.md
+    └── MANUAL-DUENO.md
 ```
+
 
 ---
 

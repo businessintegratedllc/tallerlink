@@ -1,12 +1,16 @@
 {
   "name": "tallerlink",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
-  "description": "TallerLink — sistema operativo del taller: ingreso, cotización, cola y presupuestos",
+  "description": "TallerLink — sistema operativo del taller: ingreso, cotización, cola, presupuestos y suscripciones",
   "scripts": {
     "start": "python3 -m http.server 8080",
     "serve": "npx --yes serve -p 8080",
-    "dev": "npx --yes serve -p 8080"
+    "dev": "npx --yes netlify dev",
+    "build": "echo 'static site'"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
   },
   "license": "UNLICENSED"
 }
