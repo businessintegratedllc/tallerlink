@@ -4,13 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TallerLink — Tu taller, en orden</title>
-  <meta name="description" content="Ingresá el carro, cotizá, pedí aprobación por WhatsApp, mirá la cola de mecánica y pintura, y manejá presupuestos de proyecto. Hecho para dueños de taller." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0b0e13" />
+<meta name="description" content="Ingresá el carro, cotizá, pedí aprobación por WhatsApp, mirá la cola de mecánica y pintura, y manejá presupuestos de proyecto. Hecho para dueños de taller." />
   <meta name="theme-color" content="#0b0e13" />
   <meta property="og:title" content="TallerLink — Ingreso, cotización, cola y presupuestos" />
   <meta property="og:description" content="El sistema simple del taller chico. WhatsApp incluido." />
   <meta property="og:type" content="website" />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <!-- Opcional: Payment Links de Stripe si no usás Netlify Functions todavía -->
+<!-- Opcional: Payment Links de Stripe si no usás Netlify Functions todavía -->
   <!-- <meta name="tl-payment-link-pro" content="https://buy.stripe.com/xxx" /> -->
   <!-- <meta name="tl-payment-link-bodyshop" content="https://buy.stripe.com/yyy" /> -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -138,6 +142,10 @@
     .side-brand {
       display: flex; align-items: center; gap: .55rem; padding: 1rem 1.1rem;
       border-bottom: 1px solid var(--line); font-family: var(--display); font-weight: 700; font-size: 1.05rem;
+    }
+    .side-brand img {
+      width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+      box-shadow: 0 0 18px var(--orange-glow);
     }
     .side-brand i {
       width: 32px; height: 32px; border-radius: 9px; background: var(--orange); color: #111;
@@ -506,7 +514,7 @@
   <div id="app" class="show">
     <div class="scrim" id="scrim"></div>
     <aside class="sidebar" id="sidebar">
-      <div class="side-brand"><i>T</i> TallerLink</div>
+      <div class="side-brand"><img src="/favicon.svg" width="32" height="32" alt="" style="border-radius:9px;display:block;box-shadow:0 0 18px rgba(255,122,26,.28)" /> TallerLink</div>
       <nav class="side-nav">
         <button type="button" class="nav-btn on" data-view="dashboard"><span class="ic">▣</span> Inicio</button>
         <button type="button" class="nav-btn" data-view="vehicles"><span class="ic">▣</span> Vehículos</button>
@@ -1110,8 +1118,38 @@
         return JSON.parse(decodeURIComponent(escape(atob(str.replace(/-/g, '+').replace(/_/g, '/')))));
       } catch { return null; }
     }
-    function publicQuoteUrl(ot, quote) {
-      const payload = {
+
+    function longPublicUrl(payload) {
+      const u = new URL(location.href);
+      u.search = '';
+      u.hash = '';
+      u.searchParams.set('c', encodePayload(payload));
+      return u.href;
+    }
+
+    /** Guarda payload en servidor y devuelve URL corta /c/xxxxxx */
+    async function shortenPayload(payload) {
+      const longUrl = longPublicUrl(payload);
+      try {
+        const res = await fetch('/.netlify/functions/short-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) return data.url;
+          if (data.path) return location.origin + data.path;
+          if (data.id) return location.origin + '/c/' + data.id;
+        }
+      } catch (e) {
+        console.warn('short-link failed, using long URL', e);
+      }
+      return longUrl; // fallback si Blobs no está
+    }
+
+    function quotePayload(ot, quote) {
+      return {
         type: 'quote',
         otId: ot.id,
         code: otCode(ot),
@@ -1122,14 +1160,9 @@
         status: ot.status,
         quote,
       };
-      const u = new URL(location.href);
-      u.search = '';
-      u.hash = '';
-      u.searchParams.set('c', encodePayload(payload));
-      return u.href;
     }
-    function publicProjectUrl(ot) {
-      const payload = {
+    function projectPayload(ot) {
+      return {
         type: 'project',
         otId: ot.id,
         code: otCode(ot),
@@ -1141,14 +1174,9 @@
         project: ot.project,
         reason: ot.reason,
       };
-      const u = new URL(location.href);
-      u.search = '';
-      u.hash = '';
-      u.searchParams.set('c', encodePayload(payload));
-      return u.href;
     }
-    function publicStatusUrl(ot) {
-      const payload = {
+    function statusPayload(ot) {
+      return {
         type: 'status',
         otId: ot.id,
         code: otCode(ot),
@@ -1159,11 +1187,29 @@
         status: ot.status,
         reason: ot.reason,
       };
-      const u = new URL(location.href);
-      u.search = '';
-      u.hash = '';
-      u.searchParams.set('c', encodePayload(payload));
-      return u.href;
+    }
+
+    async function publicQuoteUrl(ot, quote) {
+      return shortenPayload(quotePayload(ot, quote));
+    }
+    async function publicProjectUrl(ot) {
+      return shortenPayload(projectPayload(ot));
+    }
+    async function publicStatusUrl(ot) {
+      return shortenPayload(statusPayload(ot));
+    }
+
+    async function loadShortLink(id) {
+      const clean = String(id || '').replace(/[^a-z0-9]/gi, '').slice(0, 16);
+      if (!clean) return null;
+      try {
+        const res = await fetch('/.netlify/functions/short-link?id=' + encodeURIComponent(clean));
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.payload || null;
+      } catch {
+        return null;
+      }
     }
 
     /* ─── calc helpers ─── */
@@ -1762,9 +1808,10 @@
       });
     }
 
-    function sendQuoteWA(ot, q) {
+    async function sendQuoteWA(ot, q) {
       if (window.TLBillingGuard && !window.TLBillingGuard.beforeSendQuote()) return;
-      const link = publicQuoteUrl(ot, q);
+      toast('Generando link corto…');
+      const link = await publicQuoteUrl(ot, q);
       const msg =
 `Hola${ot.customer ? ' ' + ot.customer.split(' ')[0] : ''} 👋
 Soy de *${state.shop.name}*.
@@ -1783,7 +1830,7 @@ Cualquier duda me escribe.`;
       if (window.TLBillingGuard) window.TLBillingGuard.afterSendQuote();
       openShareSheet({
         title: 'Enviar cotización',
-        sub: 'Abrí WhatsApp o copiá el mensaje si el navegador bloquea el enlace.',
+        sub: 'Link corto listo. Abrí WhatsApp o copiá el mensaje.',
         message: msg,
         link,
         phone: ot.phone,
@@ -1871,9 +1918,10 @@ Cualquier duda me escribe.`;
       refreshAll();
     }
 
-    function sendProjectWA(ot) {
+    async function sendProjectWA(ot) {
       if (window.TLBillingGuard && !window.TLBillingGuard.beforeSendQuote()) return;
-      const link = publicProjectUrl(ot);
+      toast('Generando link corto…');
+      const link = await publicProjectUrl(ot);
       const c = calcProject(ot.project);
       const stagesTxt = (ot.project.stages || []).filter(s => s.amount).map(s =>
         `• ${s.name}: ${money(s.amount, ot.project.currency)}`
@@ -1892,7 +1940,7 @@ ${link}`;
       if (window.TLBillingGuard) window.TLBillingGuard.afterSendQuote();
       openShareSheet({
         title: 'Enviar presupuesto',
-        sub: 'Si no abre WhatsApp, copiá el mensaje y pegalo en el chat del cliente.',
+        sub: 'Link corto listo. Abrí WhatsApp o copiá el mensaje.',
         message: msg,
         link,
         phone: ot.phone,
@@ -1944,15 +1992,16 @@ ${link}`;
       return map[ot.status] || `Actualización de su ${car} en ${shop}: ${STATUS_MAP[ot.status]}`;
     }
 
-    function sendStatusWA() {
+    async function sendStatusWA() {
       const ot = state.editingId ? state.ots.find(o => o.id === state.editingId) : null;
       if (!ot) { toast('Guardá el vehículo primero'); return; }
+      toast('Generando link corto…');
       const msg = $('#statusMsg').value.trim() || autoStatusMessage(ot);
-      const link = publicStatusUrl(ot);
+      const link = await publicStatusUrl(ot);
       const full = msg + '\n\nEstado en línea:\n' + link;
       openShareSheet({
         title: 'Avisar estado',
-        sub: 'Copiá el mensaje si el entorno bloquea WhatsApp (común en previews).',
+        sub: 'Link corto listo. Abrí WhatsApp o copiá el mensaje.',
         message: full,
         link,
         phone: ot.phone,
@@ -2100,7 +2149,7 @@ ${link}`;
       pub.innerHTML = `
         <div class="wrap">
           <div class="brand">
-            <div class="l"><i>T</i> TallerLink</div>
+            <div class="l"><img src="/favicon.svg" width="30" height="30" alt="" style="border-radius:8px;display:block" /> TallerLink</div>
             <span style="font-size:.75rem;color:var(--dim)">Vista cliente</span>
           </div>
           <div class="pcard">
@@ -2296,8 +2345,20 @@ ${link}`;
     }
 
     /* ─── init ─── */
-    function init() {
+    async function init() {
       const params = new URLSearchParams(location.search);
+      // Link corto: /c/abc123 → rewrite a ?s=abc123
+      const shortId = params.get('s') || (location.pathname.match(/\/c\/([a-z0-9]+)/i) || [])[1];
+      if (shortId) {
+        const data = await loadShortLink(shortId);
+        if (data) {
+          showPublic(data);
+          return;
+        }
+        document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;background:#0b0e13;color:#eef2f7;font-family:system-ui;padding:1.5rem;text-align:center"><div><h1>Link no encontrado</h1><p style="color:#8b98ab">Puede haber expirado o el código es incorrecto.</p><a href="/" style="color:#ff7a1a">Ir a TallerLink</a></div></div>';
+        return;
+      }
+      // Link largo legacy ?c=base64
       const c = params.get('c');
       if (c) {
         const data = decodePayload(c);

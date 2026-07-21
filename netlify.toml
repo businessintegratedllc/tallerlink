@@ -28,6 +28,13 @@
   to = "/admin.html"
   status = 200
 
+# Links cortos de cotización / estado → app
+[[redirects]]
+  from = "/c/:id"
+  to = "/index.html?s=:id"
+  status = 200
+  force = true
+
 [[headers]]
   for = "/*"
   [headers.values]
