@@ -787,8 +787,22 @@
     openPaypalModal(planId || 'pro');
   }
 
+  /** True when this page is the client quote/status view (not the shop app). */
+  function isClientPublicView() {
+    try {
+      const params = new URLSearchParams(location.search);
+      // Long legacy payload
+      if (params.get('c')) return true;
+      // Short link: /c/abc123 rewritten to ?s=abc123 (or raw path)
+      if (params.get('s')) return true;
+      if (/\/c\/[a-z0-9]+/i.test(location.pathname || '')) return true;
+    } catch (_) {}
+    return false;
+  }
+
   function boot() {
-    if (new URLSearchParams(location.search).get('c')) return;
+    // Nunca mostrar registro de taller en el link del cliente (WA)
+    if (isClientPublicView()) return;
     injectStyles();
     // legacy stripe return URLs still activate plan if someone used old flow
     const params = new URLSearchParams(location.search);

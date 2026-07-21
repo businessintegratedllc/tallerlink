@@ -2408,6 +2408,23 @@ ${link}`;
     window.syncDecisionsFromServer = syncDecisionsFromServer;
   })();
   </script>
+  <script>
+    // Evita flash del panel del taller / registro en links de cliente
+    (function () {
+      try {
+        var q = new URLSearchParams(location.search);
+        var isClient = q.get('c') || q.get('s') || /\/c\/[a-z0-9]+/i.test(location.pathname || '');
+        if (isClient) {
+          document.documentElement.classList.add('tl-client-view');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    html.tl-client-view #app { display: none !important; }
+    html.tl-client-view #billGate { display: none !important; }
+  </style>
+
   <script src="/js/billing.js" defer></script>
 </body>
 </html>
