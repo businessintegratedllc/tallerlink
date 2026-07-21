@@ -1,0 +1,2184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TallerLink — Tu taller, en orden</title>
+  <meta name="description" content="Ingresá el carro, cotizá, pedí aprobación por WhatsApp, mirá la cola de mecánica y pintura, y manejá presupuestos de proyecto. Hecho para dueños de taller." />
+  <meta name="theme-color" content="#0b0e13" />
+  <meta property="og:title" content="TallerLink — Ingreso, cotización, cola y presupuestos" />
+  <meta property="og:description" content="El sistema simple del taller chico. WhatsApp incluido." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <!-- Opcional: Payment Links de Stripe si no usás Netlify Functions todavía -->
+  <!-- <meta name="tl-payment-link-pro" content="https://buy.stripe.com/xxx" /> -->
+  <!-- <meta name="tl-payment-link-bodyshop" content="https://buy.stripe.com/yyy" /> -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0e13;
+      --bg2: #10151c;
+      --panel: #141a24;
+      --card: #1a2230;
+      --card2: #222c3d;
+      --line: rgba(255,255,255,.08);
+      --line2: rgba(255,255,255,.14);
+      --text: #eef2f7;
+      --muted: #8b98ab;
+      --dim: #5f6d82;
+      --orange: #ff7a1a;
+      --orange-dim: rgba(255,122,26,.14);
+      --orange-glow: rgba(255,122,26,.28);
+      --wa: #25d366;
+      --wa-dim: rgba(37,211,102,.14);
+      --sky: #5eb1ff;
+      --sky-dim: rgba(94,177,255,.14);
+      --violet: #a78bfa;
+      --violet-dim: rgba(167,139,250,.14);
+      --ok: #3ddc97;
+      --ok-dim: rgba(61,220,151,.14);
+      --warn: #f5c542;
+      --warn-dim: rgba(245,197,66,.14);
+      --bad: #ff6b6b;
+      --bad-dim: rgba(255,107,107,.14);
+      --radius: 14px;
+      --font: 'DM Sans', system-ui, sans-serif;
+      --display: 'Space Grotesk', system-ui, sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, monospace;
+      --nav-w: 240px;
+      --top-h: 58px;
+      --shadow: 0 20px 50px rgba(0,0,0,.45);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font); background: var(--bg); color: var(--text);
+      line-height: 1.45; font-size: 15px; -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--orange); color: #111; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    a { color: inherit; text-decoration: none; }
+    .hidden { display: none !important; }
+
+    /* ========== PUBLIC CLIENT VIEW ========== */
+    #public {
+      min-height: 100vh; padding: 1.25rem 1rem 2.5rem;
+      background: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(255,122,26,.08), transparent 55%), var(--bg);
+    }
+    #public .wrap { width: min(100%, 440px); margin: 0 auto; }
+    #public .brand {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;
+    }
+    #public .brand .l {
+      display: flex; align-items: center; gap: .45rem; font-family: var(--display); font-weight: 700;
+    }
+    #public .brand .l i {
+      width: 30px; height: 30px; border-radius: 8px; background: var(--orange); color: #111;
+      display: grid; place-items: center; font-style: normal; font-weight: 800;
+    }
+    .pcard {
+      background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .pcard-head {
+      padding: 1.15rem 1.2rem; border-bottom: 1px solid var(--line);
+      background: linear-gradient(165deg, #1e2838, var(--card));
+    }
+    .pcard-head .shop { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--orange); }
+    .pcard-head h1 { font-family: var(--display); font-size: 1.35rem; letter-spacing: -.02em; margin: .3rem 0 .2rem; }
+    .pcard-head p { color: var(--muted); font-size: .88rem; }
+    .pcard-body { padding: 1.1rem 1.2rem; }
+    .pstatus {
+      display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: 1rem;
+    }
+    .pst {
+      font-size: .68rem; font-weight: 700; padding: .28rem .55rem; border-radius: 999px;
+      background: rgba(255,255,255,.04); border: 1px solid var(--line); color: var(--dim);
+    }
+    .pst.on { background: var(--orange-dim); border-color: rgba(255,122,26,.4); color: var(--orange); }
+    .pst.done { background: var(--ok-dim); border-color: rgba(61,220,151,.3); color: var(--ok); }
+    .prow {
+      display: flex; justify-content: space-between; gap: .75rem; padding: .55rem 0;
+      border-bottom: 1px solid var(--line); font-size: .9rem;
+    }
+    .prow:last-of-type { border-bottom: none; }
+    .prow b { display: block; font-weight: 600; }
+    .prow span.sub { color: var(--muted); font-size: .8rem; }
+    .prow .pr { font-family: var(--mono); font-size: .84rem; white-space: nowrap; }
+    .ptotal {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-top: .9rem; padding-top: .9rem; border-top: 1px solid var(--line2);
+      font-family: var(--display); font-size: 1.3rem; font-weight: 700;
+    }
+    .ptotal em { font-style: normal; color: var(--orange); }
+    .pnote {
+      margin-top: .75rem; padding: .75rem; background: rgba(0,0,0,.25); border-radius: 10px;
+      font-size: .84rem; color: var(--muted); line-height: 1.45;
+    }
+    .pactions { display: grid; gap: .5rem; padding: 0 1.2rem 1.2rem; }
+    .pactions .btn { width: 100%; }
+
+    /* ========== APP SHELL ========== */
+    #app { display: none; min-height: 100vh; }
+    #app.show { display: flex; }
+
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0; width: var(--nav-w);
+      background: var(--panel); border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; z-index: 30;
+      transform: translateX(-100%); transition: transform .25s ease;
+    }
+    .sidebar.open { transform: translateX(0); }
+    @media (min-width: 960px) {
+      .sidebar { transform: none; }
+      .main { margin-left: var(--nav-w); }
+    }
+    .side-brand {
+      display: flex; align-items: center; gap: .55rem; padding: 1rem 1.1rem;
+      border-bottom: 1px solid var(--line); font-family: var(--display); font-weight: 700; font-size: 1.05rem;
+    }
+    .side-brand i {
+      width: 32px; height: 32px; border-radius: 9px; background: var(--orange); color: #111;
+      display: grid; place-items: center; font-style: normal; font-weight: 800;
+      box-shadow: 0 0 18px var(--orange-glow);
+    }
+    .side-nav { padding: .75rem .65rem; display: flex; flex-direction: column; gap: .2rem; flex: 1; overflow: auto; }
+    .nav-btn {
+      display: flex; align-items: center; gap: .6rem; width: 100%;
+      border: none; background: transparent; color: var(--muted); text-align: left;
+      padding: .7rem .75rem; border-radius: 10px; cursor: pointer; font-weight: 500; font-size: .92rem;
+      transition: .15s;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    .nav-btn.on { background: var(--orange-dim); color: var(--orange); }
+    .nav-btn .ic { width: 20px; text-align: center; font-size: 1rem; }
+    .side-foot {
+      padding: .85rem 1rem; border-top: 1px solid var(--line); font-size: .75rem; color: var(--dim);
+    }
+    .side-foot strong { display: block; color: var(--muted); font-size: .82rem; margin-bottom: .15rem; }
+
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar {
+      height: var(--top-h); border-bottom: 1px solid var(--line); background: rgba(11,14,19,.9);
+      backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+      padding: 0 1rem;
+    }
+    .topbar h1 {
+      font-family: var(--display); font-size: 1.15rem; font-weight: 650; letter-spacing: -.02em;
+    }
+    .topbar-actions { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+    .menu-toggle {
+      width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line2);
+      background: transparent; color: var(--text); cursor: pointer; display: grid; place-items: center;
+    }
+    @media (min-width: 960px) { .menu-toggle { display: none; } }
+    .scrim {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 25;
+    }
+    .scrim.show { display: block; }
+    @media (min-width: 960px) { .scrim { display: none !important; } }
+
+    .content { padding: 1.1rem; flex: 1; }
+    @media (min-width: 700px) { .content { padding: 1.35rem 1.5rem; } }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+      border: none; cursor: pointer; border-radius: 999px; font-weight: 600;
+      padding: .62rem 1.05rem; transition: .15s; white-space: nowrap; font-size: .9rem;
+    }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none !important; }
+    .btn-primary { background: var(--orange); color: #111; }
+    .btn-primary:hover { box-shadow: 0 0 22px var(--orange-glow); }
+    .btn-wa { background: var(--wa); color: #fff; }
+    .btn-ghost { background: transparent; border: 1px solid var(--line2); color: var(--text); }
+    .btn-ghost:hover { background: rgba(255,255,255,.04); }
+    .btn-soft { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(255,122,26,.28); }
+    .btn-ok { background: var(--ok); color: #0a1a12; }
+    .btn-danger { background: var(--bad-dim); color: var(--bad); border: 1px solid rgba(255,107,107,.3); }
+    .btn-sm { padding: .42rem .75rem; font-size: .8rem; }
+    .btn-lg { padding: .85rem 1.25rem; font-size: .98rem; }
+    .btn-block { width: 100%; }
+
+    .stats {
+      display: grid; gap: .75rem; grid-template-columns: repeat(2, 1fr);
+      margin-bottom: 1.15rem;
+    }
+    @media (min-width: 800px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+    .stat {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem;
+    }
+    .stat .k { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+    .stat .v { font-family: var(--display); font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em; margin-top: .25rem; }
+    .stat .s { font-size: .78rem; color: var(--muted); margin-top: .15rem; }
+    .stat.orange .v { color: var(--orange); }
+    .stat.ok .v { color: var(--ok); }
+    .stat.sky .v { color: var(--sky); }
+    .stat.warn .v { color: var(--warn); }
+
+    .panel {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      overflow: hidden; margin-bottom: 1rem;
+    }
+    .panel-h {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem;
+      padding: .85rem 1rem; border-bottom: 1px solid var(--line); background: rgba(0,0,0,.18);
+    }
+    .panel-h h2 { font-family: var(--display); font-size: 1rem; font-weight: 650; letter-spacing: -.015em; }
+    .panel-b { padding: 1rem; }
+
+    .field { margin-bottom: .85rem; }
+    .field label {
+      display: block; font-size: .7rem; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: .32rem;
+    }
+    .field .hint { font-size: .75rem; color: var(--dim); margin-top: .25rem; }
+    .field input, .field select, .field textarea {
+      width: 100%; background: rgba(0,0,0,.32); border: 1px solid var(--line2);
+      border-radius: 11px; padding: .68rem .8rem; outline: none; transition: .15s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: rgba(255,122,26,.5); box-shadow: 0 0 0 3px var(--orange-dim);
+    }
+    .field textarea { resize: vertical; min-height: 70px; }
+    .field select {
+      appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%238b98ab' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right .9rem center; padding-right: 2.2rem;
+    }
+    .field select option { background: #1a2230; }
+    .row2 { display: grid; gap: .65rem; }
+    .row3 { display: grid; gap: .65rem; }
+    @media (min-width: 560px) {
+      .row2 { grid-template-columns: 1fr 1fr; }
+      .row3 { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    .row4 { display: grid; gap: .55rem; }
+    @media (min-width: 700px) {
+      .row4 { grid-template-columns: 1.4fr .6fr .7fr auto; align-items: end; }
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; font-size: .68rem; font-weight: 700;
+      padding: .22rem .5rem; border-radius: 999px; letter-spacing: .01em;
+    }
+    .b-recibido { background: var(--sky-dim); color: var(--sky); }
+    .b-diagnostico { background: var(--violet-dim); color: var(--violet); }
+    .b-espera_aprobacion { background: var(--warn-dim); color: var(--warn); }
+    .b-espera_repuestos { background: rgba(255,255,255,.06); color: var(--muted); }
+    .b-mecanica { background: var(--orange-dim); color: var(--orange); }
+    .b-enderezado { background: var(--violet-dim); color: var(--violet); }
+    .b-pintura { background: rgba(94,177,255,.18); color: #8ec8ff; }
+    .b-armado { background: var(--sky-dim); color: var(--sky); }
+    .b-listo { background: var(--ok-dim); color: var(--ok); }
+    .b-entregado { background: rgba(255,255,255,.06); color: var(--dim); }
+    .b-draft { background: rgba(255,255,255,.06); color: var(--dim); }
+    .b-sent { background: var(--sky-dim); color: var(--sky); }
+    .b-approved { background: var(--ok-dim); color: var(--ok); }
+    .b-rejected { background: var(--bad-dim); color: var(--bad); }
+
+    .table-wrap { overflow: auto; }
+    table.data { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 640px; }
+    table.data th {
+      text-align: left; padding: .6rem .7rem; font-size: .68rem; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line);
+      background: rgba(0,0,0,.2); position: sticky; top: 0;
+    }
+    table.data td {
+      padding: .7rem; border-bottom: 1px solid var(--line); vertical-align: middle; color: var(--muted);
+    }
+    table.data tr { cursor: pointer; transition: .12s; }
+    table.data tr:hover td { background: rgba(255,255,255,.02); color: var(--text); }
+    table.data tr.active td { background: var(--orange-dim); }
+    table.data td strong { color: var(--text); font-weight: 600; }
+    table.data td .sub { display: block; font-size: .76rem; color: var(--dim); margin-top: .1rem; }
+
+    .empty {
+      text-align: center; padding: 2.5rem 1rem; color: var(--dim);
+    }
+    .empty strong { display: block; color: var(--muted); font-size: 1rem; margin-bottom: .35rem; }
+
+    /* KANBAN */
+    .board-tools {
+      display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .85rem;
+    }
+    .board-tools select {
+      background: var(--card); border: 1px solid var(--line2); border-radius: 999px;
+      padding: .45rem .9rem; outline: none;
+    }
+    .kanban {
+      display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem;
+      min-height: calc(100vh - 200px); align-items: flex-start;
+    }
+    .col {
+      flex: 0 0 260px; background: var(--panel); border: 1px solid var(--line);
+      border-radius: var(--radius); display: flex; flex-direction: column; max-height: calc(100vh - 200px);
+    }
+    .col-h {
+      padding: .7rem .8rem; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between; gap: .4rem;
+      position: sticky; top: 0; background: var(--panel); border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .col-h h3 { font-size: .82rem; font-weight: 700; letter-spacing: -.01em; }
+    .col-h .cnt {
+      font-size: .7rem; font-weight: 700; background: rgba(255,255,255,.06);
+      padding: .15rem .45rem; border-radius: 999px; color: var(--muted);
+    }
+    .col-b {
+      padding: .55rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: .5rem;
+      min-height: 120px;
+    }
+    .col-b.drag-over { background: var(--orange-dim); }
+    .ticket {
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      padding: .7rem .75rem; cursor: grab; transition: .15s;
+    }
+    .ticket:active { cursor: grabbing; }
+    .ticket:hover { border-color: rgba(255,122,26,.35); }
+    .ticket.dragging { opacity: .45; }
+    .ticket .t-plate {
+      font-family: var(--mono); font-size: .72rem; color: var(--orange); margin-bottom: .2rem;
+    }
+    .ticket .t-car { font-weight: 650; font-size: .9rem; margin-bottom: .15rem; letter-spacing: -.01em; }
+    .ticket .t-meta { font-size: .75rem; color: var(--dim); }
+    .ticket .t-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem; }
+    .ticket .tag {
+      font-size: .65rem; font-weight: 700; padding: .15rem .4rem; border-radius: 999px;
+      background: rgba(255,255,255,.05); color: var(--muted);
+    }
+    .ticket .tag.ok { background: var(--ok-dim); color: var(--ok); }
+    .ticket .tag.warn { background: var(--warn-dim); color: var(--warn); }
+    .ticket .tag.money { background: var(--orange-dim); color: var(--orange); }
+
+    /* MODAL */
+    .modal-bg {
+      display: none; position: fixed; inset: 0; z-index: 50;
+      background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+      padding: 1rem; overflow-y: auto;
+    }
+    .modal-bg.show { display: grid; place-items: start center; }
+    .modal {
+      width: min(100%, 720px); margin: 1.5rem auto;
+      background: var(--card); border: 1px solid var(--line2); border-radius: 18px;
+      box-shadow: var(--shadow); overflow: hidden;
+    }
+    .modal-h {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem;
+      padding: 1rem 1.15rem; border-bottom: 1px solid var(--line); background: rgba(0,0,0,.2);
+    }
+    .modal-h h2 { font-family: var(--display); font-size: 1.15rem; letter-spacing: -.02em; }
+    .modal-h p { font-size: .82rem; color: var(--muted); margin-top: .2rem; }
+    .modal-x {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line2);
+      background: transparent; color: var(--muted); cursor: pointer; flex-shrink: 0;
+    }
+    .modal-b { padding: 1.1rem 1.15rem; max-height: min(70vh, 640px); overflow: auto; }
+    .modal-f {
+      display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end;
+      padding: .9rem 1.15rem; border-top: 1px solid var(--line); background: rgba(0,0,0,.15);
+    }
+
+    .tabs-line {
+      display: flex; gap: .3rem; flex-wrap: wrap; margin-bottom: 1rem;
+      padding: .25rem; background: rgba(0,0,0,.25); border-radius: 999px; width: fit-content;
+    }
+    .tab-line {
+      border: none; background: transparent; color: var(--muted); font-weight: 600;
+      font-size: .8rem; padding: .4rem .8rem; border-radius: 999px; cursor: pointer;
+    }
+    .tab-line.on { background: var(--orange); color: #111; }
+
+    .lines { display: flex; flex-direction: column; gap: .5rem; margin-bottom: .55rem; }
+    .line-row {
+      background: rgba(0,0,0,.22); border: 1px solid var(--line); border-radius: 12px; padding: .65rem;
+    }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line2);
+      background: transparent; color: var(--bad); cursor: pointer; display: grid; place-items: center;
+    }
+    .totals {
+      background: rgba(0,0,0,.28); border: 1px solid var(--line); border-radius: 12px;
+      padding: .8rem; margin: .75rem 0;
+    }
+    .totals .r { display: flex; justify-content: space-between; color: var(--muted); font-size: .88rem; margin: .2rem 0; }
+    .totals .r.big { color: var(--text); font-weight: 700; font-size: 1.05rem; margin-top: .4rem; padding-top: .45rem; border-top: 1px solid var(--line); }
+    .totals .r.big span:last-child { color: var(--orange); font-family: var(--display); }
+
+    .quote-list { display: flex; flex-direction: column; gap: .5rem; }
+    .quote-item {
+      background: rgba(0,0,0,.22); border: 1px solid var(--line); border-radius: 12px; padding: .8rem;
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; align-items: center;
+    }
+    .quote-item strong { display: block; font-size: .92rem; }
+    .quote-item .sub { font-size: .78rem; color: var(--dim); }
+
+    .stage-list { display: flex; flex-direction: column; gap: .5rem; }
+    .stage {
+      background: rgba(0,0,0,.22); border: 1px solid var(--line); border-radius: 12px; padding: .8rem;
+    }
+    .stage-h { display: flex; justify-content: space-between; gap: .5rem; align-items: center; margin-bottom: .45rem; }
+    .stage-h strong { font-size: .9rem; }
+
+    .toast {
+      position: fixed; bottom: 1.15rem; left: 50%; transform: translateX(-50%) translateY(140%);
+      background: var(--orange); color: #111; font-weight: 650; font-size: .9rem;
+      padding: .7rem 1.15rem; border-radius: 999px; z-index: 90;
+      box-shadow: 0 12px 32px var(--orange-glow); transition: transform .3s; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* Share sheet — works when wa.me / popups are blocked */
+    .share-bg {
+      display: none; position: fixed; inset: 0; z-index: 85;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(5px);
+      padding: 1rem; overflow-y: auto; place-items: center;
+    }
+    .share-bg.show { display: grid; }
+    .share-sheet {
+      width: min(100%, 440px); background: var(--card); border: 1px solid var(--line2);
+      border-radius: 18px; box-shadow: var(--shadow); overflow: hidden;
+    }
+    .share-sheet .sh {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem;
+      padding: 1rem 1.1rem; border-bottom: 1px solid var(--line); background: rgba(0,0,0,.2);
+    }
+    .share-sheet .sh h3 { font-family: var(--display); font-size: 1.05rem; letter-spacing: -.02em; }
+    .share-sheet .sh p { font-size: .8rem; color: var(--muted); margin-top: .2rem; line-height: 1.4; }
+    .share-sheet .sb { padding: 1rem 1.1rem; display: grid; gap: .65rem; }
+    .share-sheet textarea {
+      width: 100%; min-height: 140px; background: rgba(0,0,0,.35); border: 1px solid var(--line2);
+      border-radius: 12px; padding: .75rem; font-size: .84rem; line-height: 1.45; resize: vertical; outline: none;
+    }
+    .share-sheet .link-row {
+      display: flex; gap: .4rem; flex-wrap: wrap; align-items: stretch;
+    }
+    .share-sheet .link-row input {
+      flex: 1; min-width: 140px; background: rgba(0,0,0,.35); border: 1px solid var(--line2);
+      border-radius: 999px; padding: .55rem .85rem; font-family: var(--mono); font-size: .72rem; outline: none;
+    }
+    .share-sheet .note {
+      font-size: .75rem; color: var(--dim); line-height: 1.4;
+      padding: .65rem .75rem; background: rgba(255,122,26,.08); border: 1px solid rgba(255,122,26,.2);
+      border-radius: 10px;
+    }
+    .share-sheet .sf {
+      display: grid; gap: .45rem; padding: 0 1.1rem 1.1rem;
+    }
+    .share-sheet .sf .btn { width: 100%; }
+
+    /* Landing gate for first visit without shop name - skip, go straight to app */
+    .search {
+      display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem;
+    }
+    .search input {
+      flex: 1; min-width: 180px; background: var(--card); border: 1px solid var(--line2);
+      border-radius: 999px; padding: .6rem 1rem; outline: none;
+    }
+    .search input:focus { border-color: rgba(255,122,26,.45); }
+
+    .split {
+      display: grid; gap: 1rem;
+    }
+    @media (min-width: 960px) {
+      .split { grid-template-columns: 1.1fr .9fr; align-items: start; }
+    }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .chip {
+      border: 1px solid var(--line2); background: rgba(255,255,255,.03); color: var(--muted);
+      border-radius: 999px; padding: .35rem .7rem; font-size: .78rem; font-weight: 600; cursor: pointer;
+    }
+    .chip.on { background: var(--orange-dim); border-color: rgba(255,122,26,.4); color: var(--orange); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- PUBLIC CLIENT VIEW -->
+  <div id="public" class="hidden"></div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="show">
+    <div class="scrim" id="scrim"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand"><i>T</i> TallerLink</div>
+      <nav class="side-nav">
+        <button type="button" class="nav-btn on" data-view="dashboard"><span class="ic">▣</span> Inicio</button>
+        <button type="button" class="nav-btn" data-view="vehicles"><span class="ic">▣</span> Vehículos</button>
+        <button type="button" class="nav-btn" data-view="board"><span class="ic">☰</span> Cola del taller</button>
+        <button type="button" class="nav-btn" data-view="quotes"><span class="ic">$</span> Cotizaciones</button>
+        <button type="button" class="nav-btn" data-view="billing"><span class="ic">★</span> Plan y pago</button>
+        <button type="button" class="nav-btn" data-view="settings"><span class="ic">⚙</span> Mi taller</button>
+      </nav>
+      <div class="side-foot">
+        <strong id="sideShopName">Mi Taller</strong>
+        <span>Dueño · operación diaria</span>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:.6rem">
+          <button type="button" class="menu-toggle" id="menuBtn" aria-label="Menú">☰</button>
+          <h1 id="pageTitle">Inicio</h1>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btnNewOT">+ Ingresar carro</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <!-- DASHBOARD -->
+        <section id="view-dashboard">
+          <div class="stats" id="dashStats"></div>
+          <div class="split">
+            <div class="panel">
+              <div class="panel-h">
+                <h2>En el taller ahora</h2>
+                <button type="button" class="btn btn-ghost btn-sm" data-go="board">Ver cola</button>
+              </div>
+              <div class="panel-b table-wrap">
+                <table class="data" id="dashTable">
+                  <thead>
+                    <tr>
+                      <th>Vehículo</th>
+                      <th>Cliente</th>
+                      <th>Estado</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-h"><h2>Acciones rápidas</h2></div>
+              <div class="panel-b" style="display:grid;gap:.55rem">
+                <button type="button" class="btn btn-primary btn-block" id="quickOT">Ingresar vehículo</button>
+                <button type="button" class="btn btn-ghost btn-block" data-go="board">Abrir cola mecánica / pintura</button>
+                <button type="button" class="btn btn-ghost btn-block" data-go="quotes">Ver cotizaciones pendientes</button>
+                <div class="pnote" style="margin:0" id="dashTip">
+                  Tip: ingresá el carro apenas llega. Después cotizás y mandás el link por WhatsApp sin reescribir datos.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VEHICLES -->
+        <section id="view-vehicles" class="hidden">
+          <div class="search">
+            <input type="search" id="vehSearch" placeholder="Buscar placa, cliente, modelo…" />
+            <button type="button" class="btn btn-primary" id="btnNewOT2">+ Ingresar carro</button>
+          </div>
+          <div class="chip-row" id="vehFilters" style="margin-bottom:1rem">
+            <button type="button" class="chip on" data-filter="activos">En taller</button>
+            <button type="button" class="chip" data-filter="todos">Todos</button>
+            <button type="button" class="chip" data-filter="listo">Listos</button>
+            <button type="button" class="chip" data-filter="entregado">Entregados</button>
+          </div>
+          <div class="panel">
+            <div class="panel-b table-wrap" style="padding:0">
+              <table class="data" id="vehTable">
+                <thead>
+                  <tr>
+                    <th>OT</th>
+                    <th>Vehículo</th>
+                    <th>Cliente</th>
+                    <th>Estado</th>
+                    <th>Ingreso</th>
+                    <th>Área</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- BOARD -->
+        <section id="view-board" class="hidden">
+          <div class="board-tools">
+            <select id="boardFilter">
+              <option value="all">Todas las áreas</option>
+              <option value="mec">Solo mecánica / general</option>
+              <option value="paint">Solo enderezado / pintura</option>
+            </select>
+            <span style="font-size:.8rem;color:var(--dim)">Arrastrá las tarjetas entre columnas · el cliente puede recibir WA</span>
+          </div>
+          <div class="kanban" id="kanban"></div>
+        </section>
+
+        <!-- QUOTES -->
+        <section id="view-quotes" class="hidden">
+          <div class="panel">
+            <div class="panel-h">
+              <h2>Cotizaciones y presupuestos</h2>
+            </div>
+            <div class="panel-b" id="quotesList"></div>
+          </div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section id="view-settings" class="hidden">
+          <div class="panel">
+            <div class="panel-h"><h2>Datos de tu taller</h2></div>
+            <div class="panel-b">
+              <div class="row2">
+                <div class="field">
+                  <label for="shopName">Nombre del taller</label>
+                  <input id="shopName" maxlength="60" placeholder="Taller Martínez" />
+                </div>
+                <div class="field">
+                  <label for="shopPhone">WhatsApp del taller</label>
+                  <input id="shopPhone" placeholder="50688887777" inputmode="tel" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="shopAddr">Dirección</label>
+                <input id="shopAddr" maxlength="140" placeholder="San José, 200m sur de…" />
+              </div>
+              <div class="row2">
+                <div class="field">
+                  <label for="shopCur">Moneda por defecto</label>
+                  <select id="shopCur">
+                    <option value="CRC">CRC · colones</option>
+                    <option value="USD">USD</option>
+                    <option value="MXN">MXN</option>
+                    <option value="COP">COP</option>
+                    <option value="ARS">ARS</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="shopTax">IVA / impuesto %</label>
+                  <input id="shopTax" type="number" min="0" max="30" step="0.5" value="13" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="shopNote">Pie de cotización</label>
+                <textarea id="shopNote" placeholder="Válida 7 días. Garantía 3 meses en mano de obra."></textarea>
+              </div>
+              <button type="button" class="btn btn-primary" id="saveShop">Guardar</button>
+              <p class="hint" style="margin-top:1rem;color:var(--dim);font-size:.82rem">
+                Los datos se guardan en este dispositivo. En la versión Pro se sincronizan en la nube.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: OT detail / create -->
+  <div class="modal-bg" id="modal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-h">
+        <div>
+          <h2 id="modalTitle">Ingresar vehículo</h2>
+          <p id="modalSub">Orden de trabajo</p>
+        </div>
+        <button type="button" class="modal-x" id="modalClose">✕</button>
+      </div>
+      <div class="modal-b">
+        <div class="tabs-line" id="modalTabs">
+          <button type="button" class="tab-line on" data-mtab="info">Ingreso</button>
+          <button type="button" class="tab-line" data-mtab="quote">Cotización</button>
+          <button type="button" class="tab-line" data-mtab="project">Presupuesto proyecto</button>
+          <button type="button" class="tab-line" data-mtab="status">Estado y WA</button>
+        </div>
+
+        <!-- INFO -->
+        <div id="mtab-info">
+          <div class="row2">
+            <div class="field">
+              <label for="fCustomer">Cliente *</label>
+              <input id="fCustomer" maxlength="60" placeholder="Carlos Rojas" />
+            </div>
+            <div class="field">
+              <label for="fPhone">WhatsApp cliente</label>
+              <input id="fPhone" placeholder="50688887777" inputmode="tel" />
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="fVehicle">Vehículo *</label>
+              <input id="fVehicle" maxlength="80" placeholder="Toyota RAV4 2019" />
+            </div>
+            <div class="field">
+              <label for="fPlate">Placa *</label>
+              <input id="fPlate" maxlength="15" placeholder="ABC-123" style="text-transform:uppercase" />
+            </div>
+          </div>
+          <div class="row3">
+            <div class="field">
+              <label for="fColor">Color</label>
+              <input id="fColor" maxlength="30" placeholder="Plata" />
+            </div>
+            <div class="field">
+              <label for="fKm">Kilometraje</label>
+              <input id="fKm" type="number" min="0" placeholder="85000" />
+            </div>
+            <div class="field">
+              <label for="fFuel">Combustible</label>
+              <select id="fFuel">
+                <option value="">—</option>
+                <option>1/4</option><option>1/2</option><option>3/4</option><option>Lleno</option><option>Reserva</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="fReason">Motivo / queja del cliente</label>
+            <textarea id="fReason" placeholder="Frenos chirrían · Choque lateral derecho · Servicio 80.000 km"></textarea>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="fArea">Área principal</label>
+              <select id="fArea">
+                <option value="mecanica">Mecánica / general</option>
+                <option value="enderezado">Enderezado</option>
+                <option value="pintura">Pintura</option>
+                <option value="mixto">Mixto (chapa y pintura)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fPromise">Fecha promesa (opcional)</label>
+              <input id="fPromise" type="date" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="fNotes">Notas internas</label>
+            <textarea id="fNotes" placeholder="Llaves en tablilla 4 · Cliente deja carro y se va en Uber"></textarea>
+          </div>
+        </div>
+
+        <!-- QUOTE -->
+        <div id="mtab-quote" class="hidden">
+          <div class="field">
+            <label for="qDiag">Diagnóstico / trabajo a cotizar</label>
+            <textarea id="qDiag" placeholder="Pastillas y discos delanteros. 1 día de trabajo."></textarea>
+          </div>
+          <label style="font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)">Ítems</label>
+          <div class="lines" id="qLines"></div>
+          <button type="button" class="btn btn-soft btn-sm" id="qAddLine">+ Ítem</button>
+          <div class="row2" style="margin-top:.85rem">
+            <div class="field">
+              <label for="qCur">Moneda</label>
+              <select id="qCur">
+                <option value="CRC">CRC</option><option value="USD">USD</option>
+                <option value="MXN">MXN</option><option value="COP">COP</option><option value="ARS">ARS</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="qTax">Impuesto %</label>
+              <input id="qTax" type="number" min="0" max="30" step="0.5" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="qNotes">Notas para el cliente</label>
+            <textarea id="qNotes" placeholder="Repuestos originales. Seña 50% para pedir partes."></textarea>
+          </div>
+          <div class="totals">
+            <div class="r"><span>Subtotal</span><span id="qSub">—</span></div>
+            <div class="r"><span>Impuesto</span><span id="qTaxAmt">—</span></div>
+            <div class="r big"><span>Total</span><span id="qTotal">—</span></div>
+          </div>
+          <div class="quote-list" id="otQuotes"></div>
+        </div>
+
+        <!-- PROJECT BUDGET -->
+        <div id="mtab-project" class="hidden">
+          <p style="color:var(--muted);font-size:.88rem;margin-bottom:.85rem;line-height:1.5">
+            Para choques, enderezado y pintura. Dividí el trabajo en etapas.
+            Cada adicional puede pedirse por WhatsApp sin rehacer todo.
+          </p>
+          <div class="stage-list" id="stageList"></div>
+          <button type="button" class="btn btn-soft btn-sm" id="addStage" style="margin-top:.55rem">+ Etapa</button>
+          <div class="totals" style="margin-top:1rem">
+            <div class="r"><span>Total etapas</span><span id="projSub">—</span></div>
+            <div class="r"><span>Impuesto est.</span><span id="projTax">—</span></div>
+            <div class="r big"><span>Presupuesto proyecto</span><span id="projTotal">—</span></div>
+          </div>
+          <div class="field">
+            <label for="projNotes">Notas del proyecto</label>
+            <textarea id="projNotes" placeholder="Pueden salir adicionales al desarme. Seguros: deducible a cargo del cliente."></textarea>
+          </div>
+        </div>
+
+        <!-- STATUS -->
+        <div id="mtab-status" class="hidden">
+          <div class="field">
+            <label>Estado actual del vehículo</label>
+            <div class="chip-row" id="statusChips"></div>
+          </div>
+          <div class="field">
+            <label for="statusMsg">Mensaje al cliente (se puede mandar por WA)</label>
+            <textarea id="statusMsg" rows="4"></textarea>
+          </div>
+          <div class="pnote" id="statusHint">Elegí un estado para armar el mensaje automático.</div>
+        </div>
+      </div>
+      <div class="modal-f" id="modalFooter">
+        <!-- buttons injected -->
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <!-- Share sheet when WhatsApp / popups blocked -->
+  <div class="share-bg" id="shareBg" aria-hidden="true">
+    <div class="share-sheet" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="sh">
+        <div>
+          <h3 id="shareTitle">Enviar por WhatsApp</h3>
+          <p id="shareSub">Si el navegador bloquea WhatsApp, copiá el mensaje o el link y pegalo en el chat.</p>
+        </div>
+        <button type="button" class="modal-x" id="shareClose" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sb">
+        <div class="note" id="shareNote">
+          TallerLink <strong>no usa la API Business de Meta</strong>. Solo abre un enlace de WhatsApp (api.whatsapp.com). En previews de Arena o con popups bloqueados a veces no abre: copiá el mensaje y pegalo en el chat.
+        </div>
+        <label style="font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)">Mensaje listo</label>
+        <textarea id="shareMsg" readonly></textarea>
+        <label style="font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)">Link para el cliente</label>
+        <div class="link-row">
+          <input id="shareLink" readonly />
+          <button type="button" class="btn btn-soft btn-sm" id="shareCopyLink">Copiar link</button>
+        </div>
+      </div>
+      <div class="sf">
+        <a class="btn btn-wa btn-lg" id="shareOpenWa" href="#" target="_blank" rel="noopener">Abrir WhatsApp</a>
+        <button type="button" class="btn btn-primary" id="shareCopyMsg">Copiar mensaje completo</button>
+        <button type="button" class="btn btn-ghost" id="shareCopyBoth">Copiar mensaje + link</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="shareDismiss">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ─── constants ─── */
+    const STATUSES = [
+      { id: 'recibido', label: 'Recibido', col: true },
+      { id: 'diagnostico', label: 'Diagnóstico', col: true },
+      { id: 'espera_aprobacion', label: 'Espera aprobación', col: true },
+      { id: 'espera_repuestos', label: 'Espera repuestos', col: true },
+      { id: 'mecanica', label: 'Mecánica', col: true },
+      { id: 'enderezado', label: 'Enderezado', col: true },
+      { id: 'pintura', label: 'Pintura', col: true },
+      { id: 'armado', label: 'Armado / QC', col: true },
+      { id: 'listo', label: 'Listo', col: true },
+      { id: 'entregado', label: 'Entregado', col: false },
+    ];
+    const STATUS_MAP = Object.fromEntries(STATUSES.map(s => [s.id, s.label]));
+    const SYM = { CRC: '₡', USD: '$', MXN: '$', COP: '$', ARS: '$' };
+    const DEFAULT_STAGES = [
+      { name: 'Desarme y diagnóstico', amount: '' },
+      { name: 'Enderezado / chapa', amount: '' },
+      { name: 'Pintura', amount: '' },
+      { name: 'Armado y detalle', amount: '' },
+    ];
+
+    /* ─── state ─── */
+    const state = {
+      shop: {
+        name: 'Mi Taller',
+        phone: '',
+        addr: '',
+        note: 'Cotización válida 7 días. Gracias por su preferencia.',
+        currency: 'CRC',
+        tax: 13,
+      },
+      ots: [],
+      view: 'dashboard',
+      filter: 'activos',
+      search: '',
+      boardFilter: 'all',
+      editingId: null,
+      qLines: [],
+      stages: [],
+      modalTab: 'info',
+    };
+
+    /* ─── utils ─── */
+    const $ = (s, el = document) => el.querySelector(s);
+    const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+    const uid = () => Math.random().toString(36).slice(2, 10);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const toast = (m) => {
+      const t = $('#toast');
+      t.textContent = m;
+      t.classList.add('show');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => t.classList.remove('show'), 2400);
+    };
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          return ok;
+        } catch {
+          return false;
+        }
+      }
+    }
+    function waUrl(phone, msg) {
+      const p = parsePhone(phone);
+      const q = 'text=' + encodeURIComponent(msg || '');
+      // api.whatsapp.com often works better than wa.me behind strict browsers
+      if (p && p.length >= 10) return 'https://api.whatsapp.com/send?phone=' + p + '&' + q;
+      return 'https://api.whatsapp.com/send?' + q;
+    }
+    function openShareSheet({ title, sub, message, link, phone }) {
+      $('#shareTitle').textContent = title || 'Enviar por WhatsApp';
+      $('#shareSub').textContent = sub || 'Si WhatsApp no abre solo, copiá y pegá en el chat del cliente.';
+      $('#shareMsg').value = message || '';
+      $('#shareLink').value = link || '';
+      const openBtn = $('#shareOpenWa');
+      openBtn.href = waUrl(phone, message);
+      // Also try native share when available (phones)
+      openBtn.onclick = async (e) => {
+        // Prefer Web Share on mobile if user long-flows; click still goes to WA
+        if (navigator.share && /Mobi|Android|iPhone/i.test(navigator.userAgent) && e.metaKey) {
+          e.preventDefault();
+          try {
+            await navigator.share({ text: message, url: link, title: title || 'TallerLink' });
+          } catch (_) {}
+        }
+      };
+      $('#shareBg').classList.add('show');
+      $('#shareBg').setAttribute('aria-hidden', 'false');
+    }
+    function closeShareSheet() {
+      $('#shareBg').classList.remove('show');
+      $('#shareBg').setAttribute('aria-hidden', 'true');
+    }
+    $('#shareClose').onclick = closeShareSheet;
+    $('#shareDismiss').onclick = closeShareSheet;
+    $('#shareBg').addEventListener('click', (e) => {
+      if (e.target === $('#shareBg')) closeShareSheet();
+    });
+    $('#shareCopyMsg').onclick = async () => {
+      const ok = await copyText($('#shareMsg').value);
+      toast(ok ? 'Mensaje copiado · pegalo en WhatsApp' : 'No se pudo copiar · seleccioná el texto');
+    };
+    $('#shareCopyLink').onclick = async () => {
+      const ok = await copyText($('#shareLink').value);
+      toast(ok ? 'Link copiado' : 'No se pudo copiar el link');
+    };
+    $('#shareCopyBoth').onclick = async () => {
+      const ok = await copyText($('#shareMsg').value);
+      toast(ok ? 'Mensaje copiado · abrí WhatsApp y pegá' : 'Seleccioná y copiá manualmente');
+    };
+    function money(n, cur) {
+      const v = Number(n) || 0;
+      const sym = SYM[cur] || '$';
+      return sym + Math.round(v).toLocaleString('es');
+    }
+    function parsePhone(raw) {
+      let d = String(raw || '').replace(/\D/g, '');
+      if (d.startsWith('00')) d = d.slice(2);
+      if (d.length === 8 && /^[2-8]/.test(d)) d = '506' + d;
+      return d;
+    }
+    function otCode(ot) {
+      return 'OT-' + String(ot.num).padStart(3, '0');
+    }
+    function nextNum() {
+      const max = state.ots.reduce((m, o) => Math.max(m, o.num || 0), 0);
+      return max + 1;
+    }
+    function today() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    /* ─── persist ─── */
+    function save() {
+      try {
+        localStorage.setItem('tallerlink_v2', JSON.stringify({
+          shop: state.shop,
+          ots: state.ots,
+        }));
+      } catch (_) {}
+    }
+    function load() {
+      try {
+        const d = JSON.parse(localStorage.getItem('tallerlink_v2') || 'null');
+        if (!d) return;
+        if (d.shop) state.shop = { ...state.shop, ...d.shop };
+        if (Array.isArray(d.ots)) state.ots = d.ots;
+      } catch (_) {}
+    }
+
+    /* ─── seed demo if empty ─── */
+    function seedIfEmpty() {
+      if (state.ots.length) return;
+      if (localStorage.getItem('tallerlink_v2_seeded')) return;
+      const demo = [
+        {
+          id: uid(), num: 1, created: Date.now() - 86400000 * 2,
+          customer: 'Carlos Rojas', phone: '', vehicle: 'Toyota RAV4 2019', plate: 'ABC-123',
+          color: 'Plata', km: 82000, fuel: '1/2', reason: 'Frenos delanteros',
+          area: 'mecanica', status: 'mecanica', promise: '', notes: '',
+          quote: {
+            id: uid(), status: 'approved', diagnosis: 'Pastillas y discos delanteros',
+            lines: [
+              { desc: 'Pastillas delanteras', qty: 1, price: 42000 },
+              { desc: 'Discos delanteros (par)', qty: 1, price: 78000 },
+              { desc: 'Mano de obra', qty: 1, price: 35000 },
+            ],
+            currency: 'CRC', taxP: 13, notes: 'Repuestos de calidad. Garantía 3 meses MO.',
+            sub: 155000, tax: 20150, total: 175150,
+          },
+          quotes: [],
+          project: { stages: [], notes: '', currency: 'CRC', taxP: 13 },
+        },
+        {
+          id: uid(), num: 2, created: Date.now() - 86400000,
+          customer: 'María Solano', phone: '', vehicle: 'Hyundai Tucson 2020', plate: 'DEF-456',
+          color: 'Blanco', km: 45000, fuel: '3/4', reason: 'Choque lateral derecho',
+          area: 'mixto', status: 'espera_aprobacion', promise: '', notes: 'Seguro INS',
+          quote: null,
+          quotes: [],
+          project: {
+            stages: [
+              { id: uid(), name: 'Desarme y diagnóstico', amount: 85000 },
+              { id: uid(), name: 'Enderezado puerta y guardafango', amount: 220000 },
+              { id: uid(), name: 'Pintura', amount: 180000 },
+              { id: uid(), name: 'Armado y detalle', amount: 65000 },
+            ],
+            notes: 'Pueden salir adicionales al desarme.',
+            currency: 'CRC', taxP: 13, status: 'sent',
+          },
+        },
+        {
+          id: uid(), num: 3, created: Date.now() - 3600000 * 5,
+          customer: 'Luis Mora', phone: '', vehicle: 'Honda Civic 2018', plate: 'GHI-789',
+          color: 'Negro', km: 110000, fuel: '1/4', reason: 'Servicio mayor + ruido suspensión',
+          area: 'mecanica', status: 'espera_repuestos', promise: '', notes: '',
+          quote: {
+            id: uid(), status: 'approved', diagnosis: 'Amortiguadores delanteros + servicio',
+            lines: [
+              { desc: 'Amortiguadores delanteros', qty: 2, price: 55000 },
+              { desc: 'Kit servicio 100k', qty: 1, price: 48000 },
+              { desc: 'Mano de obra', qty: 1, price: 40000 },
+            ],
+            currency: 'CRC', taxP: 13, notes: '',
+            sub: 198000, tax: 25740, total: 223740,
+          },
+          quotes: [],
+          project: { stages: [], notes: '', currency: 'CRC', taxP: 13 },
+        },
+      ];
+      // fix quotes arrays
+      demo.forEach(o => {
+        if (o.quote) o.quotes = [o.quote];
+        else o.quotes = [];
+      });
+      state.ots = demo;
+      state.shop.name = 'Taller Demo';
+      save();
+      localStorage.setItem('tallerlink_v2_seeded', '1');
+    }
+
+    /* ─── encoding for public links ─── */
+    function encodePayload(obj) {
+      return btoa(unescape(encodeURIComponent(JSON.stringify(obj))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function decodePayload(str) {
+      try {
+        return JSON.parse(decodeURIComponent(escape(atob(str.replace(/-/g, '+').replace(/_/g, '/')))));
+      } catch { return null; }
+    }
+    function publicQuoteUrl(ot, quote) {
+      const payload = {
+        type: 'quote',
+        otId: ot.id,
+        code: otCode(ot),
+        shop: state.shop,
+        customer: ot.customer,
+        vehicle: ot.vehicle,
+        plate: ot.plate,
+        status: ot.status,
+        quote,
+      };
+      const u = new URL(location.href);
+      u.search = '';
+      u.hash = '';
+      u.searchParams.set('c', encodePayload(payload));
+      return u.href;
+    }
+    function publicProjectUrl(ot) {
+      const payload = {
+        type: 'project',
+        otId: ot.id,
+        code: otCode(ot),
+        shop: state.shop,
+        customer: ot.customer,
+        vehicle: ot.vehicle,
+        plate: ot.plate,
+        status: ot.status,
+        project: ot.project,
+        reason: ot.reason,
+      };
+      const u = new URL(location.href);
+      u.search = '';
+      u.hash = '';
+      u.searchParams.set('c', encodePayload(payload));
+      return u.href;
+    }
+    function publicStatusUrl(ot) {
+      const payload = {
+        type: 'status',
+        otId: ot.id,
+        code: otCode(ot),
+        shop: state.shop,
+        customer: ot.customer,
+        vehicle: ot.vehicle,
+        plate: ot.plate,
+        status: ot.status,
+        reason: ot.reason,
+      };
+      const u = new URL(location.href);
+      u.search = '';
+      u.hash = '';
+      u.searchParams.set('c', encodePayload(payload));
+      return u.href;
+    }
+
+    /* ─── calc helpers ─── */
+    function calcLines(lines, taxP) {
+      let sub = 0;
+      (lines || []).forEach(l => {
+        sub += (parseFloat(l.qty) || 0) * (parseFloat(l.price) || 0);
+      });
+      const tax = sub * ((parseFloat(taxP) || 0) / 100);
+      return { sub, tax, total: sub + tax };
+    }
+    function calcProject(project) {
+      const sub = (project.stages || []).reduce((s, st) => s + (parseFloat(st.amount) || 0), 0);
+      const tax = sub * ((parseFloat(project.taxP) || 0) / 100);
+      return { sub, tax, total: sub + tax };
+    }
+    function otTotal(ot) {
+      if (ot.project && ot.project.stages && ot.project.stages.some(s => parseFloat(s.amount) > 0)) {
+        const c = calcProject(ot.project);
+        return { total: c.total, currency: ot.project.currency || state.shop.currency };
+      }
+      const q = ot.quote || (ot.quotes && ot.quotes[0]);
+      if (q) return { total: q.total || 0, currency: q.currency || state.shop.currency };
+      return { total: 0, currency: state.shop.currency };
+    }
+
+    /* ─── navigation ─── */
+    function setView(name) {
+      state.view = name;
+      $$('.nav-btn').forEach(b => b.classList.toggle('on', b.dataset.view === name));
+      ['dashboard', 'vehicles', 'board', 'quotes', 'settings', 'billing'].forEach(v => {
+        const el = document.getElementById('view-' + v);
+        if (el) el.classList.toggle('hidden', v !== name);
+      });
+      const titles = {
+        dashboard: 'Inicio',
+        vehicles: 'Vehículos en el taller',
+        board: 'Cola del taller',
+        quotes: 'Cotizaciones',
+        settings: 'Mi taller',
+        billing: 'Plan y pago',
+      };
+      $('#pageTitle').textContent = titles[name] || 'TallerLink';
+      closeSidebar();
+      if (name === 'dashboard') renderDashboard();
+      if (name === 'vehicles') renderVehicles();
+      if (name === 'board') renderBoard();
+      if (name === 'quotes') renderQuotes();
+      if (name === 'settings') fillSettings();
+      if (name === 'billing' && window.TLBillingPaint) window.TLBillingPaint();
+      window.__tlSetView = setView;
+    }
+
+    function openSidebar() {
+      $('#sidebar').classList.add('open');
+      $('#scrim').classList.add('show');
+    }
+    function closeSidebar() {
+      $('#sidebar').classList.remove('open');
+      $('#scrim').classList.remove('show');
+    }
+    $('#menuBtn').onclick = openSidebar;
+    $('#scrim').onclick = closeSidebar;
+    $$('.nav-btn').forEach(b => b.onclick = () => setView(b.dataset.view));
+    $$('[data-go]').forEach(b => b.onclick = () => setView(b.dataset.go));
+
+    /* ─── dashboard ─── */
+    function renderDashboard() {
+      const active = state.ots.filter(o => o.status !== 'entregado');
+      const waitApp = state.ots.filter(o => o.status === 'espera_aprobacion').length;
+      const ready = state.ots.filter(o => o.status === 'listo').length;
+      const inWork = state.ots.filter(o => ['mecanica', 'enderezado', 'pintura', 'armado'].includes(o.status)).length;
+      const moneyPending = active.reduce((s, o) => s + (otTotal(o).total || 0), 0);
+
+      $('#dashStats').innerHTML = `
+        <div class="stat sky"><div class="k">En taller</div><div class="v">${active.length}</div><div class="s">vehículos abiertos</div></div>
+        <div class="stat warn"><div class="k">Sin aprobar</div><div class="v">${waitApp}</div><div class="s">esperando al cliente</div></div>
+        <div class="stat orange"><div class="k">En proceso</div><div class="v">${inWork}</div><div class="s">mecánica / pintura</div></div>
+        <div class="stat ok"><div class="k">Listos</div><div class="v">${ready}</div><div class="s">para retirar · ${money(moneyPending, state.shop.currency)} en OT abiertas</div></div>
+      `;
+
+      const tbody = $('#dashTable tbody');
+      const rows = active.slice(0, 8);
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><strong>No hay carros adentro</strong>Ingresá el primero con “+ Ingresar carro”.</div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(o => {
+        const t = otTotal(o);
+        return `<tr data-id="${o.id}">
+          <td><strong>${esc(o.vehicle)}</strong><span class="sub">${esc(o.plate)} · ${otCode(o)}</span></td>
+          <td>${esc(o.customer)}</td>
+          <td><span class="badge b-${o.status}">${esc(STATUS_MAP[o.status] || o.status)}</span></td>
+          <td>${t.total ? money(t.total, t.currency) : '—'}</td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('tr[data-id]').forEach(tr => {
+        tr.onclick = () => openOT(tr.dataset.id);
+      });
+    }
+
+    /* ─── vehicles list ─── */
+    function filteredOTs() {
+      let list = [...state.ots];
+      const f = state.filter;
+      if (f === 'activos') list = list.filter(o => o.status !== 'entregado');
+      if (f === 'listo') list = list.filter(o => o.status === 'listo');
+      if (f === 'entregado') list = list.filter(o => o.status === 'entregado');
+      const q = state.search.trim().toLowerCase();
+      if (q) {
+        list = list.filter(o =>
+          [o.plate, o.customer, o.vehicle, o.color, otCode(o)].join(' ').toLowerCase().includes(q)
+        );
+      }
+      list.sort((a, b) => (b.created || 0) - (a.created || 0));
+      return list;
+    }
+
+    function renderVehicles() {
+      const tbody = $('#vehTable tbody');
+      const list = filteredOTs();
+      if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>Sin resultados</strong>Probá otro filtro o ingresá un carro.</div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = list.map(o => `
+        <tr data-id="${o.id}">
+          <td><strong>${otCode(o)}</strong></td>
+          <td><strong>${esc(o.vehicle)}</strong><span class="sub">${esc(o.plate)}${o.color ? ' · ' + esc(o.color) : ''}</span></td>
+          <td>${esc(o.customer)}<span class="sub">${esc(o.phone || '')}</span></td>
+          <td><span class="badge b-${o.status}">${esc(STATUS_MAP[o.status] || o.status)}</span></td>
+          <td>${new Date(o.created).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</td>
+          <td>${esc({ mecanica: 'Mecánica', enderezado: 'Enderezado', pintura: 'Pintura', mixto: 'Mixto' }[o.area] || o.area)}</td>
+        </tr>
+      `).join('');
+      tbody.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => openOT(tr.dataset.id));
+    }
+
+    $('#vehSearch').oninput = (e) => { state.search = e.target.value; renderVehicles(); };
+    $$('#vehFilters .chip').forEach(c => {
+      c.onclick = () => {
+        $$('#vehFilters .chip').forEach(x => x.classList.remove('on'));
+        c.classList.add('on');
+        state.filter = c.dataset.filter;
+        renderVehicles();
+      };
+    });
+
+    /* ─── kanban ─── */
+    function boardColumns() {
+      let cols = STATUSES.filter(s => s.col);
+      if (state.boardFilter === 'mec') {
+        cols = cols.filter(s => !['enderezado', 'pintura'].includes(s.id));
+      }
+      if (state.boardFilter === 'paint') {
+        cols = cols.filter(s => !['mecanica'].includes(s.id) || true);
+        // keep general flow but highlight paint — show all except pure nothing
+      }
+      return cols;
+    }
+
+    function renderBoard() {
+      const root = $('#kanban');
+      const cols = boardColumns();
+      root.innerHTML = cols.map(col => {
+        let tickets = state.ots.filter(o => o.status === col.id);
+        if (state.boardFilter === 'paint') {
+          // show only paint-related ots in paint columns; still show waits for those ots
+          const paintAreas = ['enderezado', 'pintura', 'mixto'];
+          tickets = tickets.filter(o => paintAreas.includes(o.area) || ['recibido', 'diagnostico', 'espera_aprobacion', 'espera_repuestos', 'armado', 'listo'].includes(col.id) && paintAreas.includes(o.area));
+        }
+        if (state.boardFilter === 'mec') {
+          tickets = tickets.filter(o => o.area === 'mecanica' || o.area === 'mixto' || !o.area);
+        }
+        return `
+          <div class="col" data-col="${col.id}">
+            <div class="col-h">
+              <h3>${esc(col.label)}</h3>
+              <span class="cnt">${tickets.length}</span>
+            </div>
+            <div class="col-b" data-col="${col.id}">
+              ${tickets.map(o => ticketHTML(o)).join('') || '<div style="font-size:.78rem;color:var(--dim);padding:.5rem;text-align:center">Vacío</div>'}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // drag and drop
+      root.querySelectorAll('.ticket').forEach(el => {
+        el.draggable = true;
+        el.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', el.dataset.id);
+          el.classList.add('dragging');
+        });
+        el.addEventListener('dragend', () => el.classList.remove('dragging'));
+        el.addEventListener('click', (e) => {
+          if (e.defaultPrevented) return;
+          openOT(el.dataset.id);
+        });
+      });
+      root.querySelectorAll('.col-b').forEach(col => {
+        col.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          col.classList.add('drag-over');
+        });
+        col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+        col.addEventListener('drop', (e) => {
+          e.preventDefault();
+          col.classList.remove('drag-over');
+          const id = e.dataTransfer.getData('text/plain');
+          const ot = state.ots.find(o => o.id === id);
+          if (!ot) return;
+          const newStatus = col.dataset.col;
+          if (ot.status === newStatus) return;
+          ot.status = newStatus;
+          save();
+          renderBoard();
+          toast(ot.plate + ' → ' + STATUS_MAP[newStatus]);
+        });
+      });
+    }
+
+    function ticketHTML(o) {
+      const t = otTotal(o);
+      const qStatus = o.quote?.status || (o.project?.status) || '';
+      return `
+        <div class="ticket" data-id="${o.id}">
+          <div class="t-plate">${esc(o.plate)}</div>
+          <div class="t-car">${esc(o.vehicle)}</div>
+          <div class="t-meta">${esc(o.customer)}${o.promise ? ' · 📅 ' + esc(o.promise) : ''}</div>
+          <div class="t-tags">
+            ${t.total ? `<span class="tag money">${money(t.total, t.currency)}</span>` : ''}
+            ${qStatus === 'approved' ? '<span class="tag ok">Aprobado</span>' : ''}
+            ${qStatus === 'sent' || o.status === 'espera_aprobacion' ? '<span class="tag warn">Por aprobar</span>' : ''}
+            ${o.area === 'pintura' || o.area === 'mixto' || o.area === 'enderezado' ? `<span class="tag">${esc(o.area)}</span>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    $('#boardFilter').onchange = (e) => {
+      state.boardFilter = e.target.value;
+      renderBoard();
+    };
+
+    /* ─── quotes list view ─── */
+    function renderQuotes() {
+      const root = $('#quotesList');
+      const items = [];
+      state.ots.forEach(o => {
+        (o.quotes || []).forEach(q => {
+          items.push({ ot: o, quote: q, kind: 'quote' });
+        });
+        if (o.project && o.project.stages && o.project.stages.some(s => parseFloat(s.amount) > 0)) {
+          items.push({ ot: o, project: o.project, kind: 'project' });
+        }
+      });
+      if (!items.length) {
+        root.innerHTML = `<div class="empty"><strong>Sin cotizaciones todavía</strong>Abrí un vehículo y creá una en la pestaña Cotización.</div>`;
+        return;
+      }
+      root.innerHTML = items.map(it => {
+        if (it.kind === 'project') {
+          const c = calcProject(it.project);
+          return `
+            <div class="quote-item" data-ot="${it.ot.id}">
+              <div>
+                <strong>Proyecto · ${esc(it.ot.vehicle)} · ${esc(it.ot.plate)}</strong>
+                <div class="sub">${esc(it.ot.customer)} · ${it.project.stages.length} etapas · ${money(c.total, it.project.currency)}</div>
+              </div>
+              <div style="display:flex;gap:.35rem;flex-wrap:wrap;align-items:center">
+                <span class="badge b-${it.project.status || 'draft'}">${esc({ draft: 'Borrador', sent: 'Enviado', approved: 'Aprobado', rejected: 'Rechazado' }[it.project.status] || 'Presupuesto')}</span>
+                <button type="button" class="btn btn-ghost btn-sm" data-open="${it.ot.id}">Abrir</button>
+              </div>
+            </div>`;
+        }
+        const q = it.quote;
+        return `
+          <div class="quote-item">
+            <div>
+              <strong>${esc(it.ot.vehicle)} · ${esc(it.ot.plate)}</strong>
+              <div class="sub">${esc(it.ot.customer)} · ${money(q.total, q.currency)} · ${esc(q.diagnosis || 'Cotización')}</div>
+            </div>
+            <div style="display:flex;gap:.35rem;flex-wrap:wrap;align-items:center">
+              <span class="badge b-${q.status || 'draft'}">${esc({ draft: 'Borrador', sent: 'Enviada', approved: 'Aprobada', rejected: 'Rechazada' }[q.status] || q.status)}</span>
+              <button type="button" class="btn btn-ghost btn-sm" data-open="${it.ot.id}">Abrir</button>
+              <button type="button" class="btn btn-wa btn-sm" data-wa-q="${it.ot.id}" data-qid="${q.id}">WhatsApp</button>
+            </div>
+          </div>`;
+      }).join('');
+      root.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openOT(b.dataset.open));
+      root.querySelectorAll('[data-wa-q]').forEach(b => {
+        b.onclick = () => {
+          const ot = state.ots.find(o => o.id === b.dataset.waQ);
+          const q = ot?.quotes?.find(x => x.id === b.dataset.qid) || ot?.quote;
+          if (ot && q) sendQuoteWA(ot, q);
+        };
+      });
+    }
+
+    /* ─── settings ─── */
+    function fillSettings() {
+      $('#shopName').value = state.shop.name || '';
+      $('#shopPhone').value = state.shop.phone || '';
+      $('#shopAddr').value = state.shop.addr || '';
+      $('#shopCur').value = state.shop.currency || 'CRC';
+      $('#shopTax').value = state.shop.tax ?? 13;
+      $('#shopNote').value = state.shop.note || '';
+    }
+    $('#saveShop').onclick = () => {
+      state.shop = {
+        name: $('#shopName').value.trim() || 'Mi Taller',
+        phone: $('#shopPhone').value.trim(),
+        addr: $('#shopAddr').value.trim(),
+        currency: $('#shopCur').value,
+        tax: parseFloat($('#shopTax').value) || 0,
+        note: $('#shopNote').value.trim(),
+      };
+      $('#sideShopName').textContent = state.shop.name;
+      save();
+      toast('Taller guardado');
+    };
+
+    /* ─── modal OT ─── */
+    function openModal() {
+      $('#modal').classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal() {
+      $('#modal').classList.remove('show');
+      document.body.style.overflow = '';
+      state.editingId = null;
+    }
+    $('#modalClose').onclick = closeModal;
+    $('#modal').addEventListener('click', (e) => {
+      if (e.target === $('#modal')) closeModal();
+    });
+
+    function setModalTab(tab) {
+      state.modalTab = tab;
+      $$('#modalTabs .tab-line').forEach(t => t.classList.toggle('on', t.dataset.mtab === tab));
+      ['info', 'quote', 'project', 'status'].forEach(t => {
+        $('#mtab-' + t).classList.toggle('hidden', t !== tab);
+      });
+      renderModalFooter();
+      if (tab === 'quote') { renderQLines(); calcQuoteUI(); renderOtQuotesList(); }
+      if (tab === 'project') { renderStages(); calcProjUI(); }
+      if (tab === 'status') renderStatusTab();
+    }
+    $$('#modalTabs .tab-line').forEach(t => t.onclick = () => setModalTab(t.dataset.mtab));
+
+    function emptyLine() { return { id: uid(), desc: '', qty: 1, price: '' }; }
+
+    function newOT() {
+      if (window.TLBillingGuard && !window.TLBillingGuard.beforeNewOT()) return;
+      state.editingId = null;
+      $('#modalTitle').textContent = 'Ingresar vehículo';
+      $('#modalSub').textContent = 'Nueva orden de trabajo';
+      ['fCustomer','fPhone','fVehicle','fPlate','fColor','fKm','fReason','fPromise','fNotes'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      $('#fFuel').value = '';
+      $('#fArea').value = 'mecanica';
+      state.qLines = [emptyLine(), emptyLine()];
+      $('#qDiag').value = '';
+      $('#qNotes').value = '';
+      $('#qCur').value = state.shop.currency || 'CRC';
+      $('#qTax').value = state.shop.tax ?? 13;
+      state.stages = DEFAULT_STAGES.map(s => ({ id: uid(), name: s.name, amount: '' }));
+      $('#projNotes').value = '';
+      setModalTab('info');
+      openModal();
+      renderModalFooter();
+    }
+
+    function openOT(id) {
+      const ot = state.ots.find(o => o.id === id);
+      if (!ot) return;
+      state.editingId = id;
+      $('#modalTitle').textContent = otCode(ot) + ' · ' + ot.plate;
+      $('#modalSub').textContent = ot.vehicle + ' · ' + ot.customer;
+      $('#fCustomer').value = ot.customer || '';
+      $('#fPhone').value = ot.phone || '';
+      $('#fVehicle').value = ot.vehicle || '';
+      $('#fPlate').value = ot.plate || '';
+      $('#fColor').value = ot.color || '';
+      $('#fKm').value = ot.km || '';
+      $('#fFuel').value = ot.fuel || '';
+      $('#fReason').value = ot.reason || '';
+      $('#fArea').value = ot.area || 'mecanica';
+      $('#fPromise').value = ot.promise || '';
+      $('#fNotes').value = ot.notes || '';
+
+      const q = ot.quote || null;
+      if (q) {
+        $('#qDiag').value = q.diagnosis || '';
+        $('#qNotes').value = q.notes || '';
+        $('#qCur').value = q.currency || state.shop.currency;
+        $('#qTax').value = q.taxP ?? state.shop.tax;
+        state.qLines = (q.lines || []).map(l => ({ id: uid(), desc: l.desc, qty: l.qty, price: l.price }));
+        if (!state.qLines.length) state.qLines = [emptyLine()];
+      } else {
+        $('#qDiag').value = ot.reason || '';
+        $('#qNotes').value = '';
+        $('#qCur').value = state.shop.currency;
+        $('#qTax').value = state.shop.tax;
+        state.qLines = [emptyLine(), emptyLine()];
+      }
+
+      if (ot.project && ot.project.stages && ot.project.stages.length) {
+        state.stages = ot.project.stages.map(s => ({ id: s.id || uid(), name: s.name, amount: s.amount }));
+        $('#projNotes').value = ot.project.notes || '';
+      } else {
+        state.stages = DEFAULT_STAGES.map(s => ({ id: uid(), name: s.name, amount: '' }));
+        $('#projNotes').value = '';
+      }
+
+      setModalTab('info');
+      openModal();
+    }
+
+    function collectInfo() {
+      return {
+        customer: $('#fCustomer').value.trim(),
+        phone: parsePhone($('#fPhone').value),
+        vehicle: $('#fVehicle').value.trim(),
+        plate: $('#fPlate').value.trim().toUpperCase(),
+        color: $('#fColor').value.trim(),
+        km: $('#fKm').value ? parseInt($('#fKm').value, 10) : '',
+        fuel: $('#fFuel').value,
+        reason: $('#fReason').value.trim(),
+        area: $('#fArea').value,
+        promise: $('#fPromise').value,
+        notes: $('#fNotes').value.trim(),
+      };
+    }
+
+    function saveOTInfo() {
+      const info = collectInfo();
+      if (!info.customer || !info.vehicle || !info.plate) {
+        toast('Cliente, vehículo y placa son obligatorios');
+        setModalTab('info');
+        return null;
+      }
+      if (state.editingId) {
+        const ot = state.ots.find(o => o.id === state.editingId);
+        Object.assign(ot, info);
+        save();
+        return ot;
+      }
+      const ot = {
+        id: uid(),
+        num: nextNum(),
+        created: Date.now(),
+        status: 'recibido',
+        ...info,
+        quote: null,
+        quotes: [],
+        project: {
+          stages: [],
+          notes: '',
+          currency: state.shop.currency,
+          taxP: state.shop.tax,
+          status: 'draft',
+        },
+      };
+      state.ots.unshift(ot);
+      state.editingId = ot.id;
+      save();
+      $('#modalTitle').textContent = otCode(ot) + ' · ' + ot.plate;
+      $('#modalSub').textContent = ot.vehicle + ' · ' + ot.customer;
+      toast('Vehículo ingresado · ' + otCode(ot));
+      return ot;
+    }
+
+    /* quote lines UI */
+    function renderQLines() {
+      const root = $('#qLines');
+      root.innerHTML = state.qLines.map((l, i) => `
+        <div class="line-row" data-id="${l.id}">
+          <div class="row4">
+            <div class="field" style="margin:0">
+              <label>Descripción</label>
+              <input data-k="desc" value="${esc(l.desc)}" placeholder="${i === 0 ? 'Pastillas delanteras' : 'Mano de obra'}" />
+            </div>
+            <div class="field" style="margin:0">
+              <label>Cant.</label>
+              <input data-k="qty" type="number" min="1" value="${esc(l.qty)}" />
+            </div>
+            <div class="field" style="margin:0">
+              <label>P. unit.</label>
+              <input data-k="price" type="number" min="0" step="1" value="${esc(l.price)}" />
+            </div>
+            <button type="button" class="icon-btn" data-del ${state.qLines.length <= 1 ? 'disabled' : ''}>✕</button>
+          </div>
+        </div>
+      `).join('');
+      root.querySelectorAll('[data-id]').forEach(row => {
+        const id = row.dataset.id;
+        row.querySelectorAll('[data-k]').forEach(inp => {
+          inp.oninput = () => {
+            const item = state.qLines.find(x => x.id === id);
+            if (item) item[inp.dataset.k] = inp.value;
+            calcQuoteUI();
+          };
+        });
+        row.querySelector('[data-del]')?.addEventListener('click', () => {
+          state.qLines = state.qLines.filter(x => x.id !== id);
+          if (!state.qLines.length) state.qLines.push(emptyLine());
+          renderQLines(); calcQuoteUI();
+        });
+      });
+    }
+    $('#qAddLine').onclick = () => { state.qLines.push(emptyLine()); renderQLines(); };
+    $('#qCur').onchange = calcQuoteUI;
+    $('#qTax').oninput = calcQuoteUI;
+
+    function calcQuoteUI() {
+      const lines = state.qLines.map(l => ({
+        desc: l.desc, qty: parseFloat(l.qty) || 0, price: parseFloat(l.price) || 0,
+      }));
+      const c = calcLines(lines, $('#qTax').value);
+      const cur = $('#qCur').value;
+      $('#qSub').textContent = money(c.sub, cur);
+      $('#qTaxAmt').textContent = money(c.tax, cur);
+      $('#qTotal').textContent = money(c.total, cur);
+      return c;
+    }
+
+    function buildQuoteFromForm() {
+      const lines = state.qLines
+        .map(l => ({ desc: l.desc.trim(), qty: parseFloat(l.qty) || 0, price: parseFloat(l.price) || 0 }))
+        .filter(l => l.desc || l.price);
+      const c = calcLines(lines, $('#qTax').value);
+      return {
+        id: uid(),
+        status: 'draft',
+        diagnosis: $('#qDiag').value.trim(),
+        lines,
+        currency: $('#qCur').value,
+        taxP: parseFloat($('#qTax').value) || 0,
+        notes: $('#qNotes').value.trim(),
+        ...c,
+        created: Date.now(),
+      };
+    }
+
+    function saveQuoteToOT(send) {
+      let ot = state.editingId ? state.ots.find(o => o.id === state.editingId) : null;
+      if (!ot) ot = saveOTInfo();
+      if (!ot) return;
+      const q = buildQuoteFromForm();
+      if (!q.lines.length) { toast('Agregá ítems a la cotización'); return; }
+      if (send) q.status = 'sent';
+      ot.quotes = ot.quotes || [];
+      ot.quotes.unshift(q);
+      ot.quote = q; // latest
+      if (send) ot.status = 'espera_aprobacion';
+      save();
+      renderOtQuotesList();
+      if (send) {
+        sendQuoteWA(ot, q);
+        toast('Cotización lista · elegí cómo enviarla');
+      } else {
+        toast('Cotización guardada');
+      }
+      refreshAll();
+    }
+
+    function renderOtQuotesList() {
+      const ot = state.editingId ? state.ots.find(o => o.id === state.editingId) : null;
+      const root = $('#otQuotes');
+      if (!ot || !ot.quotes || !ot.quotes.length) {
+        root.innerHTML = '';
+        return;
+      }
+      root.innerHTML = '<p style="font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:1rem 0 .5rem">Historial en esta OT</p>' +
+        ot.quotes.map(q => `
+          <div class="quote-item">
+            <div>
+              <strong>${money(q.total, q.currency)}</strong>
+              <div class="sub">${esc(q.diagnosis || 'Cotización')} · ${new Date(q.created || Date.now()).toLocaleDateString('es')}</div>
+            </div>
+            <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+              <span class="badge b-${q.status}">${esc({ draft: 'Borrador', sent: 'Enviada', approved: 'Aprobada', rejected: 'Rechazada' }[q.status] || q.status)}</span>
+              <button type="button" class="btn btn-wa btn-sm" data-send="${q.id}">WA</button>
+            </div>
+          </div>
+        `).join('');
+      root.querySelectorAll('[data-send]').forEach(b => {
+        b.onclick = () => {
+          const q = ot.quotes.find(x => x.id === b.dataset.send);
+          if (q) sendQuoteWA(ot, q);
+        };
+      });
+    }
+
+    function sendQuoteWA(ot, q) {
+      if (window.TLBillingGuard && !window.TLBillingGuard.beforeSendQuote()) return;
+      const link = publicQuoteUrl(ot, q);
+      const msg =
+`Hola${ot.customer ? ' ' + ot.customer.split(' ')[0] : ''} 👋
+Soy de *${state.shop.name}*.
+
+Cotización de su *${ot.vehicle}* (${ot.plate}):
+*Total: ${money(q.total, q.currency)}*
+
+Detalle y aprobación:
+${link}
+
+Cualquier duda me escribe.`;
+      q.status = q.status === 'draft' ? 'sent' : q.status;
+      if (ot.status === 'recibido' || ot.status === 'diagnostico') ot.status = 'espera_aprobacion';
+      save();
+      refreshAll();
+      if (window.TLBillingGuard) window.TLBillingGuard.afterSendQuote();
+      openShareSheet({
+        title: 'Enviar cotización',
+        sub: 'Abrí WhatsApp o copiá el mensaje si el navegador bloquea el enlace.',
+        message: msg,
+        link,
+        phone: ot.phone,
+      });
+    }
+
+    /* project stages */
+    function renderStages() {
+      const root = $('#stageList');
+      root.innerHTML = state.stages.map((s, i) => `
+        <div class="stage" data-id="${s.id}">
+          <div class="stage-h">
+            <strong>Etapa ${i + 1}</strong>
+            <button type="button" class="icon-btn" data-del style="width:32px;height:32px" ${state.stages.length <= 1 ? 'disabled' : ''}>✕</button>
+          </div>
+          <div class="row2">
+            <div class="field" style="margin:0">
+              <label>Nombre</label>
+              <input data-k="name" value="${esc(s.name)}" placeholder="Pintura" />
+            </div>
+            <div class="field" style="margin:0">
+              <label>Monto</label>
+              <input data-k="amount" type="number" min="0" step="1" value="${esc(s.amount)}" placeholder="0" />
+            </div>
+          </div>
+        </div>
+      `).join('');
+      root.querySelectorAll('[data-id]').forEach(row => {
+        const id = row.dataset.id;
+        row.querySelectorAll('[data-k]').forEach(inp => {
+          inp.oninput = () => {
+            const st = state.stages.find(x => x.id === id);
+            if (st) st[inp.dataset.k] = inp.value;
+            calcProjUI();
+          };
+        });
+        row.querySelector('[data-del]')?.addEventListener('click', () => {
+          state.stages = state.stages.filter(x => x.id !== id);
+          if (!state.stages.length) state.stages.push({ id: uid(), name: 'Etapa', amount: '' });
+          renderStages(); calcProjUI();
+        });
+      });
+    }
+    $('#addStage').onclick = () => {
+      state.stages.push({ id: uid(), name: '', amount: '' });
+      renderStages();
+    };
+    function calcProjUI() {
+      const project = {
+        stages: state.stages,
+        taxP: state.shop.tax,
+        currency: state.shop.currency,
+      };
+      const c = calcProject(project);
+      const cur = state.shop.currency;
+      $('#projSub').textContent = money(c.sub, cur);
+      $('#projTax').textContent = money(c.tax, cur);
+      $('#projTotal').textContent = money(c.total, cur);
+      return c;
+    }
+
+    function saveProject(send) {
+      let ot = state.editingId ? state.ots.find(o => o.id === state.editingId) : null;
+      if (!ot) ot = saveOTInfo();
+      if (!ot) return;
+      const c = calcProjUI();
+      ot.project = {
+        stages: state.stages.map(s => ({ id: s.id, name: s.name, amount: parseFloat(s.amount) || 0 })),
+        notes: $('#projNotes').value.trim(),
+        currency: state.shop.currency,
+        taxP: state.shop.tax,
+        status: send ? 'sent' : (ot.project?.status || 'draft'),
+        sub: c.sub,
+        tax: c.tax,
+        total: c.total,
+      };
+      if (send) ot.status = 'espera_aprobacion';
+      save();
+      if (send) {
+        sendProjectWA(ot);
+        toast('Presupuesto listo · elegí cómo enviarlo');
+      } else {
+        toast('Presupuesto guardado');
+      }
+      refreshAll();
+    }
+
+    function sendProjectWA(ot) {
+      if (window.TLBillingGuard && !window.TLBillingGuard.beforeSendQuote()) return;
+      const link = publicProjectUrl(ot);
+      const c = calcProject(ot.project);
+      const stagesTxt = (ot.project.stages || []).filter(s => s.amount).map(s =>
+        `• ${s.name}: ${money(s.amount, ot.project.currency)}`
+      ).join('\n');
+      const msg =
+`Hola${ot.customer ? ' ' + ot.customer.split(' ')[0] : ''} 👋
+*${state.shop.name}* — presupuesto de proyecto
+
+${ot.vehicle} (${ot.plate})
+${stagesTxt}
+
+*Total est.: ${money(c.total, ot.project.currency)}* (incl. imp.)
+
+Ver detalle y aprobar:
+${link}`;
+      if (window.TLBillingGuard) window.TLBillingGuard.afterSendQuote();
+      openShareSheet({
+        title: 'Enviar presupuesto',
+        sub: 'Si no abre WhatsApp, copiá el mensaje y pegalo en el chat del cliente.',
+        message: msg,
+        link,
+        phone: ot.phone,
+      });
+    }
+
+    /* status tab */
+    function renderStatusTab() {
+      const ot = state.editingId ? state.ots.find(o => o.id === state.editingId) : null;
+      const root = $('#statusChips');
+      root.innerHTML = STATUSES.map(s =>
+        `<button type="button" class="chip ${ot && ot.status === s.id ? 'on' : ''}" data-st="${s.id}">${esc(s.label)}</button>`
+      ).join('');
+      root.querySelectorAll('[data-st]').forEach(b => {
+        b.onclick = () => {
+          root.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+          b.classList.add('on');
+          if (ot) {
+            ot.status = b.dataset.st;
+            save();
+            $('#statusMsg').value = autoStatusMessage(ot);
+            toast('Estado: ' + STATUS_MAP[ot.status]);
+            refreshAll();
+          } else {
+            $('#statusMsg').value = 'Guardá el ingreso del vehículo primero.';
+          }
+        };
+      });
+      if (ot) $('#statusMsg').value = autoStatusMessage(ot);
+      else $('#statusMsg').value = '';
+    }
+
+    function autoStatusMessage(ot) {
+      const name = ot.customer ? ot.customer.split(' ')[0] : '';
+      const car = `${ot.vehicle} (${ot.plate})`;
+      const shop = state.shop.name;
+      const map = {
+        recibido: `Hola${name ? ' ' + name : ''}, ya tenemos su ${car} en *${shop}*. Le avisamos cuando tengamos el diagnóstico.`,
+        diagnostico: `Hola${name ? ' ' + name : ''}, estamos diagnosticando su ${car}. En breve le mandamos la cotización.`,
+        espera_aprobacion: `Hola${name ? ' ' + name : ''}, la cotización de su ${car} está lista. ¿Nos confirma para continuar?`,
+        espera_repuestos: `Hola${name ? ' ' + name : ''}, su ${car} está en espera de repuestos. Le avisamos cuando lleguen para continuar.`,
+        mecanica: `Hola${name ? ' ' + name : ''}, su ${car} ya está en reparación en *${shop}*.`,
+        enderezado: `Hola${name ? ' ' + name : ''}, su ${car} está en enderezado.`,
+        pintura: `Hola${name ? ' ' + name : ''}, su ${car} está en pintura. Le avisamos al siguiente paso.`,
+        armado: `Hola${name ? ' ' + name : ''}, estamos en armado y control de calidad de su ${car}.`,
+        listo: `Hola${name ? ' ' + name : ''}, su ${car} ya está *listo para retirar* en *${shop}*${state.shop.addr ? ' (' + state.shop.addr + ')' : ''}. ¡Gracias!`,
+        entregado: `Hola${name ? ' ' + name : ''}, gracias por confiar en *${shop}*. ¡Buen camino!`,
+      };
+      return map[ot.status] || `Actualización de su ${car} en ${shop}: ${STATUS_MAP[ot.status]}`;
+    }
+
+    function sendStatusWA() {
+      const ot = state.editingId ? state.ots.find(o => o.id === state.editingId) : null;
+      if (!ot) { toast('Guardá el vehículo primero'); return; }
+      const msg = $('#statusMsg').value.trim() || autoStatusMessage(ot);
+      const link = publicStatusUrl(ot);
+      const full = msg + '\n\nEstado en línea:\n' + link;
+      openShareSheet({
+        title: 'Avisar estado',
+        sub: 'Copiá el mensaje si el entorno bloquea WhatsApp (común en previews).',
+        message: full,
+        link,
+        phone: ot.phone,
+      });
+    }
+
+    function renderModalFooter() {
+      const f = $('#modalFooter');
+      const tab = state.modalTab;
+      if (tab === 'info') {
+        f.innerHTML = `
+          <button type="button" class="btn btn-ghost" id="mfClose">Cerrar</button>
+          <button type="button" class="btn btn-primary" id="mfSave">Guardar ingreso</button>
+          <button type="button" class="btn btn-soft" id="mfSaveQuote">Guardar y cotizar</button>
+        `;
+        $('#mfClose').onclick = closeModal;
+        $('#mfSave').onclick = () => { if (saveOTInfo()) { refreshAll(); } };
+        $('#mfSaveQuote').onclick = () => { if (saveOTInfo()) setModalTab('quote'); };
+      } else if (tab === 'quote') {
+        f.innerHTML = `
+          <button type="button" class="btn btn-ghost" id="mfClose">Cerrar</button>
+          <button type="button" class="btn btn-soft" id="mfSaveQ">Guardar cotización</button>
+          <button type="button" class="btn btn-wa" id="mfSendQ">Guardar y enviar WA</button>
+        `;
+        $('#mfClose').onclick = closeModal;
+        $('#mfSaveQ').onclick = () => saveQuoteToOT(false);
+        $('#mfSendQ').onclick = () => saveQuoteToOT(true);
+      } else if (tab === 'project') {
+        f.innerHTML = `
+          <button type="button" class="btn btn-ghost" id="mfClose">Cerrar</button>
+          <button type="button" class="btn btn-soft" id="mfSaveP">Guardar presupuesto</button>
+          <button type="button" class="btn btn-wa" id="mfSendP">Enviar por WhatsApp</button>
+        `;
+        $('#mfClose').onclick = closeModal;
+        $('#mfSaveP').onclick = () => saveProject(false);
+        $('#mfSendP').onclick = () => saveProject(true);
+      } else {
+        f.innerHTML = `
+          <button type="button" class="btn btn-ghost" id="mfClose">Cerrar</button>
+          <button type="button" class="btn btn-primary" id="mfSaveSt">Guardar estado</button>
+          <button type="button" class="btn btn-wa" id="mfSendSt">Avisar por WhatsApp</button>
+        `;
+        $('#mfClose').onclick = closeModal;
+        $('#mfSaveSt').onclick = () => {
+          const ot = saveOTInfo();
+          if (ot) {
+            const on = $('#statusChips .chip.on');
+            if (on) ot.status = on.dataset.st;
+            save();
+            toast('Estado guardado');
+            refreshAll();
+          }
+        };
+        $('#mfSendSt').onclick = sendStatusWA;
+      }
+    }
+
+    function refreshAll() {
+      if (state.view === 'dashboard') renderDashboard();
+      if (state.view === 'vehicles') renderVehicles();
+      if (state.view === 'board') renderBoard();
+      if (state.view === 'quotes') renderQuotes();
+      $('#sideShopName').textContent = state.shop.name;
+    }
+
+    /* buttons */
+    $('#btnNewOT').onclick = newOT;
+    $('#btnNewOT2').onclick = newOT;
+    $('#quickOT').onclick = newOT;
+
+    /* ─── PUBLIC CLIENT VIEW ─── */
+    function showPublic(data) {
+      $('#app').classList.remove('show');
+      $('#app').style.display = 'none';
+      const pub = $('#public');
+      pub.classList.remove('hidden');
+
+      const shop = data.shop || {};
+      const statusFlow = ['recibido', 'diagnostico', 'espera_aprobacion', 'mecanica', 'pintura', 'listo'];
+      // simplify flow display
+      const flowIds = ['espera_aprobacion', 'mecanica', 'pintura', 'listo'];
+      const st = data.status || 'recibido';
+
+      let body = '';
+      if (data.type === 'quote' && data.quote) {
+        const q = data.quote;
+        body = `
+          ${q.diagnosis ? `<div class="pnote" style="margin-top:0"><strong style="color:var(--text)">Trabajo:</strong> ${esc(q.diagnosis)}</div>` : ''}
+          ${(q.lines || []).map(l => `
+            <div class="prow">
+              <div><b>${esc(l.desc)}</b><span class="sub">× ${esc(l.qty)}</span></div>
+              <div class="pr">${money((l.qty || 0) * (l.price || 0), q.currency)}</div>
+            </div>
+          `).join('')}
+          <div class="ptotal"><span>Total</span><em>${money(q.total, q.currency)}</em></div>
+          <div style="font-size:.75rem;color:var(--dim);margin-top:.25rem">Impuestos: ${money(q.tax, q.currency)}</div>
+          ${q.notes ? `<div class="pnote">${esc(q.notes)}</div>` : ''}
+          ${shop.note ? `<div class="pnote">${esc(shop.note)}</div>` : ''}
+          <div class="pactions" id="pActions">
+            ${q.status === 'approved' ? `<div class="pnote" style="text-align:center;color:var(--ok)">✓ Usted ya aprobó este trabajo</div>` : ''}
+            ${q.status === 'rejected' ? `<div class="pnote" style="text-align:center">Registramos que no por ahora</div>` : ''}
+            ${q.status !== 'approved' && q.status !== 'rejected' ? `
+              <button type="button" class="btn btn-ok btn-lg" data-act="approve">Aprobar trabajo</button>
+              <button type="button" class="btn btn-ghost" data-act="reject">No por ahora</button>
+            ` : ''}
+            ${shop.phone ? `<a class="btn btn-ghost btn-sm" href="https://api.whatsapp.com/send?phone=${parsePhone(shop.phone)}&text=${encodeURIComponent('Hola, soy ' + (data.customer || 'cliente') + ' por el ' + (data.vehicle || '') + ' ' + (data.plate || ''))}">Escribir al taller</a>` : ''}
+          </div>
+        `;
+      } else if (data.type === 'project' && data.project) {
+        const p = data.project;
+        const c = calcProject(p);
+        body = `
+          ${data.reason ? `<div class="pnote" style="margin-top:0"><strong style="color:var(--text)">Proyecto:</strong> ${esc(data.reason)}</div>` : ''}
+          ${(p.stages || []).filter(s => s.amount || s.name).map(s => `
+            <div class="prow">
+              <div><b>${esc(s.name || 'Etapa')}</b></div>
+              <div class="pr">${money(s.amount, p.currency)}</div>
+            </div>
+          `).join('')}
+          <div class="ptotal"><span>Total est.</span><em>${money(p.total || c.total, p.currency)}</em></div>
+          ${p.notes ? `<div class="pnote">${esc(p.notes)}</div>` : ''}
+          <div class="pactions" id="pActions">
+            ${p.status === 'approved' ? `<div class="pnote" style="text-align:center;color:var(--ok)">✓ Presupuesto aprobado</div>` : ''}
+            ${p.status !== 'approved' && p.status !== 'rejected' ? `
+              <button type="button" class="btn btn-ok btn-lg" data-act="approve">Aprobar presupuesto</button>
+              <button type="button" class="btn btn-ghost" data-act="reject">No por ahora</button>
+            ` : ''}
+            ${shop.phone ? `<a class="btn btn-ghost btn-sm" href="https://api.whatsapp.com/send?phone=${parsePhone(shop.phone)}">Escribir al taller</a>` : ''}
+          </div>
+        `;
+      } else {
+        body = `
+          <div class="pnote" style="margin-top:0">Estado actual de su vehículo en el taller.</div>
+          <div class="ptotal" style="border:none;margin:0;padding:0;font-size:1.1rem"><span>Estado</span><em style="color:var(--sky)">${esc(STATUS_MAP[st] || st)}</em></div>
+          ${data.reason ? `<div class="pnote">${esc(data.reason)}</div>` : ''}
+          ${shop.addr ? `<div class="pnote">📍 ${esc(shop.addr)}</div>` : ''}
+          <div class="pactions">
+            ${shop.phone ? `<a class="btn btn-wa btn-lg" href="https://api.whatsapp.com/send?phone=${parsePhone(shop.phone)}&text=${encodeURIComponent('Hola, consulto por mi ' + (data.vehicle || 'vehículo') + ' ' + (data.plate || ''))}">Escribir al taller</a>` : ''}
+          </div>
+        `;
+      }
+
+      const flow = ['Enviado', 'Aprobado', 'En taller', 'Listo'];
+      // visual only
+      pub.innerHTML = `
+        <div class="wrap">
+          <div class="brand">
+            <div class="l"><i>T</i> TallerLink</div>
+            <span style="font-size:.75rem;color:var(--dim)">Vista cliente</span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="shop">${esc(shop.name || 'Taller')}</div>
+              <h1>${esc(data.vehicle || 'Vehículo')}</h1>
+              <p>${esc(data.customer || '')}${data.plate ? ' · Placa ' + esc(data.plate) : ''}${data.code ? ' · ' + esc(data.code) : ''}</p>
+            </div>
+            <div class="pcard-body">
+              <div class="pstatus">
+                <span class="pst ${st !== 'entregado' ? 'on' : 'done'}">${esc(STATUS_MAP[st] || st)}</span>
+              </div>
+              ${body}
+            </div>
+          </div>
+          <p style="text-align:center;margin-top:1.2rem;font-size:.78rem;color:var(--dim)">Powered by TallerLink</p>
+        </div>
+      `;
+
+      pub.querySelectorAll('[data-act]').forEach(btn => {
+        btn.onclick = () => {
+          const act = btn.dataset.act;
+          // save decision locally for shop if same browser
+          try {
+            const raw = JSON.parse(localStorage.getItem('tallerlink_v2') || '{}');
+            if (Array.isArray(raw.ots)) {
+              const ot = raw.ots.find(o => o.id === data.otId);
+              if (ot) {
+                if (data.type === 'quote' && data.quote) {
+                  const q = (ot.quotes || []).find(x => x.id === data.quote.id) || ot.quote;
+                  if (q) q.status = act === 'approve' ? 'approved' : 'rejected';
+                  if (ot.quote && ot.quote.id === data.quote.id) ot.quote.status = q.status;
+                  if (act === 'approve') ot.status = 'mecanica';
+                }
+                if (data.type === 'project' && ot.project) {
+                  ot.project.status = act === 'approve' ? 'approved' : 'rejected';
+                  if (act === 'approve') {
+                    ot.status = ot.area === 'pintura' || ot.area === 'enderezado' || ot.area === 'mixto' ? 'enderezado' : 'mecanica';
+                  }
+                }
+                localStorage.setItem('tallerlink_v2', JSON.stringify(raw));
+              }
+            }
+            const dec = JSON.parse(localStorage.getItem('tallerlink_decisions') || '{}');
+            dec[data.otId + '_' + (data.quote?.id || data.type)] = { act, at: Date.now() };
+            localStorage.setItem('tallerlink_decisions', JSON.stringify(dec));
+          } catch (_) {}
+
+          if (data.type === 'quote' && data.quote) data.quote.status = act === 'approve' ? 'approved' : 'rejected';
+          if (data.type === 'project' && data.project) data.project.status = act === 'approve' ? 'approved' : 'rejected';
+          showPublic(data);
+          toast(act === 'approve' ? '✓ Aprobado · gracias' : 'Respuesta registrada');
+        };
+      });
+    }
+
+    /* ─── init ─── */
+    function init() {
+      const params = new URLSearchParams(location.search);
+      const c = params.get('c');
+      if (c) {
+        const data = decodePayload(c);
+        if (data) {
+          showPublic(data);
+          return;
+        }
+      }
+      load();
+      seedIfEmpty();
+      $('#sideShopName').textContent = state.shop.name;
+      setView('dashboard');
+    }
+
+    init();
+    window.__tlSetView = setView;
+    window.toast = toast;
+  })();
+  </script>
+  <script src="/js/billing.js" defer></script>
+</body>
+</html>
