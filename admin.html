@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TallerLink Admin — Planes PayPal</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0e13; --card: #1a2230; --line: rgba(255,255,255,.1);
+      --text: #eef2f7; --muted: #8b98ab; --dim: #5f6d82;
+      --orange: #ff7a1a; --ok: #3ddc97; --bad: #ff6b6b; --pp: #0070ba;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif; background: var(--bg); color: var(--text);
+      min-height: 100vh; padding: 1.25rem; line-height: 1.45;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 1.4rem; letter-spacing: -.02em; }
+    .sub { color: var(--muted); font-size: .9rem; margin: .35rem 0 1.25rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+      padding: 1.15rem; margin-bottom: 1rem;
+    }
+    label {
+      display: block; font-size: .7rem; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: .3rem;
+    }
+    input, select, textarea {
+      width: 100%; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.14);
+      border-radius: 11px; padding: .7rem .85rem; color: var(--text); margin-bottom: .75rem;
+      font: inherit; outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(255,122,26,.5); box-shadow: 0 0 0 3px rgba(255,122,26,.14);
+    }
+    .row { display: grid; gap: .65rem; }
+    @media (min-width: 560px) { .row.two { grid-template-columns: 1fr 1fr; } }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+      border: none; border-radius: 999px; font-weight: 600; padding: .7rem 1.1rem;
+      cursor: pointer; font: inherit;
+    }
+    .btn-primary { background: var(--orange); color: #111; }
+    .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.14); color: var(--text); }
+    .btn-bad { background: rgba(255,107,107,.15); color: var(--bad); border: 1px solid rgba(255,107,107,.35); }
+    .btn-ok { background: rgba(61,220,151,.15); color: var(--ok); border: 1px solid rgba(61,220,151,.35); }
+    .btn-block { width: 100%; }
+    .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
+    .msg {
+      padding: .75rem .9rem; border-radius: 10px; font-size: .88rem; margin-bottom: 1rem; display: none;
+    }
+    .msg.show { display: block; }
+    .msg.ok { background: rgba(61,220,151,.12); border: 1px solid rgba(61,220,151,.3); color: var(--ok); }
+    .msg.err { background: rgba(255,107,107,.12); border: 1px solid rgba(255,107,107,.3); color: var(--bad); }
+    .msg.info { background: rgba(255,122,26,.1); border: 1px solid rgba(255,122,26,.25); color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--dim); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; }
+    td { color: var(--muted); }
+    td strong { color: var(--text); }
+    .badge {
+      display: inline-block; font-size: .68rem; font-weight: 700; padding: .15rem .45rem;
+      border-radius: 999px; background: rgba(255,255,255,.06);
+    }
+    .badge.pro, .badge.bodyshop { background: rgba(61,220,151,.15); color: var(--ok); }
+    .badge.free { color: var(--muted); }
+    .badge.blocked { background: rgba(255,107,107,.15); color: var(--bad); }
+    .hint { font-size: .78rem; color: var(--dim); line-height: 1.45; margin-top: .5rem; }
+    a { color: #5eb1ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin TallerLink</h1>
+    <p class="sub">
+      Si un taller marcó “Ya pagué” y <strong>no pagó en PayPal</strong>, bajalo a Free aquí.
+      <br />PayPal: <a href="https://www.paypal.com/paypalme/RandallCastroR9" target="_blank" rel="noopener">paypal.me/RandallCastroR9</a>
+    </p>
+
+    <div class="msg info show" id="setupMsg">
+      1) En Netlify → Environment variables creá <code>ADMIN_SECRET</code> (una clave larga).<br />
+      2) Redeploy.<br />
+      3) Pegá esa misma clave abajo (se guarda solo en este navegador).
+    </div>
+    <div class="msg" id="flash"></div>
+
+    <div class="card">
+      <label>Clave admin (ADMIN_SECRET)</label>
+      <input id="adminKey" type="password" placeholder="tu-clave-secreta" autocomplete="off" />
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" id="btnSaveKey">Guardar clave en este navegador</button>
+        <button type="button" class="btn btn-ghost" id="btnClearKey">Borrar clave</button>
+      </div>
+      <p class="hint">No compartas esta clave. Quien la tenga puede cambiar planes de cualquier email.</p>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1.05rem;margin-bottom:.85rem;font-family:'Space Grotesk',system-ui,sans-serif">Cambiar plan de un taller</h2>
+      <label>Email del taller (el del registro)</label>
+      <input id="email" type="email" placeholder="taller@email.com" />
+      <div class="row two">
+        <div>
+          <label>Plan</label>
+          <select id="plan">
+            <option value="free">Free (sin pago)</option>
+            <option value="pro">Pro ($29)</option>
+            <option value="bodyshop">Body Shop ($49)</option>
+          </select>
+        </div>
+        <div>
+          <label>Días de validez (si Pro/Body)</label>
+          <input id="days" type="number" min="1" max="365" value="30" />
+        </div>
+      </div>
+      <label>Nota interna (opcional)</label>
+      <input id="note" placeholder="No pagó PayPal · comprobante falso · etc." maxlength="200" />
+      <div class="actions">
+        <button type="button" class="btn btn-bad" id="btnRevoke">Bajar a Free (no pagó)</button>
+        <button type="button" class="btn btn-ok" id="btnActivate">Activar / extender plan</button>
+        <button type="button" class="btn btn-primary" id="btnLookup">Consultar email</button>
+      </div>
+      <p class="hint" id="lookupOut"></p>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem">
+        <h2 style="font-size:1.05rem;font-family:'Space Grotesk',system-ui,sans-serif">Últimos planes en servidor</h2>
+        <button type="button" class="btn btn-ghost" id="btnList">Actualizar lista</button>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Plan</th><th>Estado</th><th>Hasta</th><th>Nota</th><th></th></tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="6" style="color:var(--dim)">Cargá la clave y tocá Actualizar lista</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="hint">
+      <a href="/">← Volver a TallerLink</a> ·
+      El taller, al abrir la app, sincroniza su plan desde el servidor.
+      Si lo bajaste a Free, al recargar pierde Pro.
+    </p>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const KEY = 'tl_admin_key';
+
+    function flash(msg, type) {
+      const el = $('flash');
+      el.textContent = msg;
+      el.className = 'msg show ' + (type || 'info');
+      setTimeout(() => el.classList.remove('show'), 5000);
+    }
+
+    function getKey() {
+      return ($('adminKey').value || localStorage.getItem(KEY) || '').trim();
+    }
+
+    $('adminKey').value = localStorage.getItem(KEY) || '';
+    $('btnSaveKey').onclick = () => {
+      localStorage.setItem(KEY, getKey());
+      flash('Clave guardada en este navegador', 'ok');
+    };
+    $('btnClearKey').onclick = () => {
+      localStorage.removeItem(KEY);
+      $('adminKey').value = '';
+      flash('Clave borrada', 'info');
+    };
+
+    async function api(method, body, qs) {
+      const key = getKey();
+      if (!key) throw new Error('Falta ADMIN_SECRET (clave admin)');
+      const url = '/.netlify/functions/admin-plan' + (qs || '');
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': key,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || ('HTTP ' + res.status));
+      }
+      return data;
+    }
+
+    $('btnLookup').onclick = async () => {
+      try {
+        const email = $('email').value.trim();
+        if (!email) return flash('Poné el email', 'err');
+        const data = await api('GET', null, '?email=' + encodeURIComponent(email));
+        if (!data.record) {
+          $('lookupOut').textContent = 'Sin registro en servidor para ' + email + ' (sigue el plan local del navegador).';
+          flash('Sin plan en servidor', 'info');
+          return;
+        }
+        const r = data.record;
+        $('plan').value = r.plan || 'free';
+        $('note').value = r.note || '';
+        $('lookupOut').textContent =
+          email + ' → ' + (r.plan || '?') + ' / ' + (r.status || '?') +
+          (r.currentPeriodEnd ? ' · hasta ' + new Date(r.currentPeriodEnd).toLocaleString('es') : '') +
+          (r.note ? ' · ' + r.note : '');
+        flash('Plan encontrado', 'ok');
+      } catch (e) {
+        flash(e.message, 'err');
+      }
+    };
+
+    async function setPlan(plan, status) {
+      const email = $('email').value.trim();
+      if (!email) return flash('Poné el email del taller', 'err');
+      const days = parseInt($('days').value, 10) || 30;
+      const note = $('note').value.trim();
+      try {
+        const data = await api('POST', { email, plan, status, days, note });
+        flash(
+          plan === 'free' || status === 'blocked'
+            ? 'Listo: ' + email + ' bajado a Free. Al abrir la app pierde Pro.'
+            : 'Listo: ' + email + ' → ' + plan + ' por ' + days + ' días.',
+          'ok'
+        );
+        loadList();
+      } catch (e) {
+        flash(e.message, 'err');
+      }
+    }
+
+    $('btnRevoke').onclick = () => {
+      if (!confirm('¿Bajar este taller a Free? (no pagó / abuso)')) return;
+      $('plan').value = 'free';
+      setPlan('free', 'blocked');
+    };
+    $('btnActivate').onclick = () => {
+      const plan = $('plan').value || 'pro';
+      if (plan === 'free') return setPlan('free', 'active');
+      setPlan(plan, 'active');
+    };
+
+    function loadList() {
+      api('POST', { action: 'list' })
+        .then((data) => {
+          const list = data.list || [];
+          const tb = $('tbody');
+          if (!list.length) {
+            tb.innerHTML = '<tr><td colspan="6" style="color:var(--dim)">Vacío</td></tr>';
+            return;
+          }
+          tb.innerHTML = list
+            .map((r) => {
+              const em = (r.email || '').replace(/"/g, '');
+              return `<tr>
+              <td><strong>${esc(r.email)}</strong></td>
+              <td><span class="badge ${esc(r.plan)}">${esc(r.plan)}</span></td>
+              <td>${esc(r.status)}</td>
+              <td>${r.currentPeriodEnd ? new Date(r.currentPeriodEnd).toLocaleDateString('es') : '—'}</td>
+              <td>${esc(r.note || '')}</td>
+              <td><button type="button" class="btn btn-bad" style="padding:.35rem .65rem;font-size:.75rem" data-revoke="${esc(em)}">Free</button></td>
+            </tr>`;
+            })
+            .join('');
+          tb.querySelectorAll('[data-revoke]').forEach((btn) => {
+            btn.onclick = () => {
+              $('email').value = btn.dataset.revoke;
+              $('plan').value = 'free';
+              if (confirm('¿Bajar ' + btn.dataset.revoke + ' a Free?')) setPlan('free', 'blocked');
+            };
+          });
+        })
+        .catch((e) => {
+          $('tbody').innerHTML = `<tr><td colspan="6" style="color:var(--bad)">${esc(e.message)}</td></tr>`;
+        });
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+      );
+    }
+
+    $('btnList').onclick = loadList;
+    if (getKey()) loadList();
+  </script>
+</body>
+</html>

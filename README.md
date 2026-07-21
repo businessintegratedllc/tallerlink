@@ -75,6 +75,7 @@ Netlify → Import repo → publish directory `.` → Deploy.
 
 - **Plan completo (90 días → 12 meses → $1M):** [`docs/PLAN-COMPLETO.md`](docs/PLAN-COMPLETO.md)
 - **Pago con PayPal (principal):** [`docs/PAYPAL.md`](docs/PAYPAL.md) → [paypal.me/RandallCastroR9](https://www.paypal.com/paypalme/RandallCastroR9)
+- **Admin: bajar a Free si no pagó:** [`admin.html`](admin.html) · [`docs/ADMIN-PLANES.md`](docs/ADMIN-PLANES.md)
 - **Suscripciones (histórico Stripe):** [`docs/SUSCRIPCIONES.md`](docs/SUSCRIPCIONES.md)
 - **Manual del dueño:** [`docs/MANUAL-DUENO.md`](docs/MANUAL-DUENO.md)
 

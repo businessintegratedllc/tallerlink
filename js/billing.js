@@ -264,15 +264,104 @@
         email: b.email,
         ownerName: b.ownerName,
       };
-      return this.activatePlan(plan.id, {
+      const result = this.activatePlan(plan.id, {
         status: 'active',
         paymentMethod: 'paypal',
         lastPayment: entry,
         pushHistory: entry,
         currentPeriodEnd: Date.now() + 30 * 86400000,
       });
+      // Avisa al servidor (si hay admin) — no bloquea si falla
+      pushPlanToServer(result).catch(() => {});
+      return result;
+    },
+    setFree(reason) {
+      const b = this.get();
+      b.plan = 'free';
+      b.status = 'active';
+      b.trialEndsAt = null;
+      b.currentPeriodEnd = null;
+      b.lastPayment = b.lastPayment || null;
+      b.revokeNote = (reason || '').slice(0, 200);
+      b.revokedAt = Date.now();
+      saveBilling(b);
+      return b;
     },
   };
+
+  async function pushPlanToServer(b) {
+    // opcional: si el usuario tiene admin key en session no aplica;
+    // guardamos solo si existe endpoint (redeploy)
+    try {
+      await fetch('/.netlify/functions/admin-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': localStorage.getItem('tl_admin_key') || '' },
+        body: JSON.stringify({
+          email: b.email,
+          plan: b.plan,
+          status: b.status,
+          note: 'self_activate_paypal',
+          days: 30,
+          currentPeriodEnd: b.currentPeriodEnd,
+        }),
+      });
+    } catch (_) {}
+  }
+
+  /**
+   * Baja el plan definido en el panel admin.
+   * Si vos lo bajaste a Free/blocked por no pagar → el taller pierde Pro al abrir la app.
+   */
+  async function syncPlanFromServer() {
+    const b = billing.get();
+    if (!b.email) return null;
+    try {
+      const res = await fetch(
+        '/.netlify/functions/plan-status?email=' + encodeURIComponent(b.email)
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !data.record) return null;
+      const rec = data.record;
+
+      // Prioridad del servidor: free/blocked siempre gana (anti-fraude)
+      if (rec.status === 'blocked' || rec.plan === 'free') {
+        const wasPaid = b.plan === 'pro' || b.plan === 'bodyshop';
+        billing.setFree(rec.note || 'Plan actualizado por administración');
+        if (rec.status === 'blocked') {
+          const bb = billing.get();
+          bb.status = 'blocked';
+          saveBilling(bb);
+        }
+        if (wasPaid && window.toast) {
+          window.toast('Tu plan pasó a Free. Si ya pagaste, escribinos.');
+        }
+        return rec;
+      }
+
+      // Upgrade/confirmación desde admin (pago verificado por vos)
+      if (
+        (rec.plan === 'pro' || rec.plan === 'bodyshop') &&
+        (rec.status === 'active' || rec.status === 'trialing')
+      ) {
+        const remoteEnd = rec.currentPeriodEnd || 0;
+        const localEnd = b.currentPeriodEnd || 0;
+        if (remoteEnd >= localEnd || !isPaid(b) || b.plan !== rec.plan) {
+          billing.activatePlan(rec.plan, {
+            status: rec.status,
+            currentPeriodEnd: rec.currentPeriodEnd || Date.now() + 30 * 86400000,
+            paymentMethod: 'paypal',
+          });
+        }
+      }
+      return rec;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // export for boot
+  window.__tlSyncPlan = syncPlanFromServer;
 
   window.TLBilling = billing;
 
@@ -419,6 +508,8 @@
               El pago se hace con <strong>PayPal</strong>
               (<a href="${PAYPAL.base}" target="_blank" rel="noopener" style="color:#5eb1ff">paypal.me/${PAYPAL.me}</a>.
               Después tocá <strong>Ya pagué</strong> para activar el plan. Renová cada mes desde aquí.
+              Si el pago no aparece en PayPal, administración puede volver el taller a Free
+              (<a href="/admin.html" style="color:#5eb1ff">panel admin</a>).
             </p>
           </div>
         </div>
@@ -715,6 +806,17 @@
     ensureNav();
     ensureView();
     paintBillingUI();
+
+    // Sincronizar plan desde admin (si no pagó y lo bajaste a Free)
+    syncPlanFromServer().then((rec) => {
+      if (rec) paintBillingUI();
+    });
+    setInterval(() => {
+      if (document.hidden) return;
+      syncPlanFromServer().then((rec) => {
+        if (rec) paintBillingUI();
+      });
+    }, 20000);
 
     document.querySelectorAll('.nav-btn').forEach((btn) => {
       btn.addEventListener('click', () => setTimeout(paintLimitBanner, 50));
