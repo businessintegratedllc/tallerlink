@@ -1,16 +1,19 @@
 {
   "name": "tallerlink",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
-  "description": "TallerLink — sistema operativo del taller: ingreso, cotización, cola, presupuestos y suscripciones",
+  "description": "TallerLink — taller OS + PayPal + admin",
   "scripts": {
     "start": "python3 -m http.server 8080",
     "serve": "npx --yes serve -p 8080",
-    "dev": "npx --yes netlify dev",
-    "build": "echo 'static site'"
+    "dev": "npx --yes netlify-cli dev",
+    "build": "npm install --omit=dev"
   },
   "dependencies": {
-    "@netlify/blobs": "^8.1.0"
+    "@netlify/blobs": "^8.2.0"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "license": "UNLICENSED"
 }

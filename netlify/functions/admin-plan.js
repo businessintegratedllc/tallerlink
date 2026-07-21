@@ -4,15 +4,12 @@
  * Headers: x-admin-key: <ADMIN_SECRET>
  * Env Netlify: ADMIN_SECRET=una-clave-larga-tuya
  *
- * GET  ?email=taller@x.com          → { plan, status, ... }
- * POST { email, plan, status, note, days }  → guarda plan del email
- * POST { action:'list' }            → lista reciente (máx 200)
- *
- * plan: free | pro | bodyshop
- * status: active | past_due | canceled | blocked
+ * GET  ?email=taller@x.com
+ * POST { email, plan, status, note, days }
+ * POST { action:'list' }
  */
 
-const { getStore } = require('@netlify/blobs');
+const { openStore, storeGetJSON, storeSetJSON } = require('./_blobs');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -29,26 +26,34 @@ exports.handler = async (event) => {
   if (!adminKey) {
     return json(503, {
       error: 'admin_not_configured',
-      message: 'Definí ADMIN_SECRET en Netlify Environment variables y redeploy.',
+      message: 'Definí ADMIN_SECRET en Netlify → Environment variables y hacé Clear cache and deploy.',
     });
   }
 
   if (String(given) !== String(adminKey)) {
-    return json(401, { error: 'unauthorized' });
+    return json(401, {
+      error: 'unauthorized',
+      message: 'Clave admin incorrecta. Debe ser exactamente igual a ADMIN_SECRET.',
+    });
   }
 
   let store;
   try {
-    store = getStore('tallerlink-plans');
+    store = openStore('tallerlink-plans', event);
   } catch (err) {
-    return json(503, { error: 'blobs_unavailable', detail: String(err.message || err) });
+    return json(503, {
+      error: 'blobs_unavailable',
+      message:
+        'Blobs no disponible. Solución: 1) netlify.toml build = npm install  2) redeploy con clear cache  3) abrí la URL de Netlify (no localhost sin netlify dev).',
+      detail: String(err.message || err),
+    });
   }
 
   try {
     if (event.httpMethod === 'GET') {
       const email = normEmail((event.queryStringParameters || {}).email);
       if (!email) return json(400, { error: 'email_required' });
-      const rec = (await store.get(emailKey(email), { type: 'json' })) || null;
+      const rec = await storeGetJSON(store, emailKey(email));
       return json(200, { ok: true, email, record: rec });
     }
 
@@ -61,34 +66,30 @@ exports.handler = async (event) => {
       }
 
       if (body.action === 'list') {
-        const idx = (await store.get('__index', { type: 'json' })) || [];
+        const idx = (await storeGetJSON(store, '__index')) || [];
         const list = [];
-        for (const em of (idx || []).slice(0, 200)) {
-          try {
-            const r = await store.get(emailKey(em), { type: 'json' });
-            if (r) list.push(r);
-          } catch (_) {}
+        for (const em of (Array.isArray(idx) ? idx : []).slice(0, 200)) {
+          const r = await storeGetJSON(store, emailKey(em));
+          if (r) list.push(r);
         }
         list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
         return json(200, { ok: true, list });
       }
 
       const email = normEmail(body.email);
-      if (!email) return json(400, { error: 'email_required' });
+      if (!email) return json(400, { error: 'email_required', message: 'Falta el email del taller' });
 
       let plan = String(body.plan || 'free').toLowerCase();
       if (!['free', 'pro', 'bodyshop'].includes(plan)) plan = 'free';
 
-      let status = String(body.status || (plan === 'free' ? 'active' : 'active')).toLowerCase();
+      let status = String(body.status || 'active').toLowerCase();
       if (!['active', 'past_due', 'canceled', 'blocked', 'trialing'].includes(status)) {
         status = 'active';
       }
 
-      // blocked = forzar free
       if (status === 'blocked' || plan === 'free') {
         plan = 'free';
-        if (status === 'blocked') status = 'blocked';
-        else status = 'active';
+        status = status === 'blocked' ? 'blocked' : 'active';
       }
 
       const days = Math.min(365, Math.max(1, parseInt(body.days, 10) || 30));
@@ -99,33 +100,31 @@ exports.handler = async (event) => {
       const record = {
         email,
         plan,
-        status: status === 'blocked' ? 'blocked' : status,
+        status,
         note: String(body.note || '').slice(0, 300),
         updatedAt: now,
         currentPeriodEnd,
         source: 'admin',
       };
 
-      await store.setJSON(emailKey(email), record);
+      await storeSetJSON(store, emailKey(email), record);
 
-      // index
-      let idx = [];
-      try {
-        idx = (await store.get('__index', { type: 'json' })) || [];
-      } catch (_) {
-        idx = [];
-      }
+      let idx = (await storeGetJSON(store, '__index')) || [];
       if (!Array.isArray(idx)) idx = [];
       if (!idx.includes(email)) idx.unshift(email);
       idx = idx.slice(0, 500);
-      await store.setJSON('__index', idx);
+      await storeSetJSON(store, '__index', idx);
 
       return json(200, { ok: true, record });
     }
 
     return json(405, { error: 'method_not_allowed' });
   } catch (err) {
-    return json(500, { error: 'server_error', message: err.message });
+    return json(500, {
+      error: 'server_error',
+      message: err.message,
+      detail: String(err.stack || '').slice(0, 500),
+    });
   }
 };
 

@@ -1,13 +1,10 @@
 /**
- * Aprobaciones del cliente → visibles en el panel del taller.
- *
- * POST JSON: { key, status: 'approved'|'rejected', otId, kind, quoteId?, plate?, customer? }
- * GET  ?key=...  |  ?otId=...  |  ?keys=a,b,c
- *
- * Requiere deploy en Netlify (usa Netlify Blobs).
+ * Aprobaciones del cliente → panel del taller.
+ * POST { key, status, otId, kind, quoteId? }
+ * GET  ?key= | ?otId= | ?keys=
  */
 
-const { getStore } = require('@netlify/blobs');
+const { openStore, storeGetJSON, storeSetJSON } = require('./_blobs');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -16,12 +13,12 @@ exports.handler = async (event) => {
 
   let store;
   try {
-    store = getStore('tallerlink-decisions');
+    store = openStore('tallerlink-decisions', event);
   } catch (err) {
     return json(503, {
       error: 'blobs_unavailable',
       message:
-        'Netlify Blobs no disponible. Tiene que estar deployado en Netlify (no file://). En local usá: netlify dev',
+        'Blobs no disponible. En Netlify el build debe ser "npm install". Luego Clear cache and deploy.',
       detail: String(err.message || err),
     });
   }
@@ -60,20 +57,15 @@ exports.handler = async (event) => {
         customer: body.customer ? String(body.customer).slice(0, 80) : null,
       };
 
-      await store.setJSON(key, record);
+      await storeSetJSON(store, key, record);
 
       const otId = record.otId;
       if (otId) {
         const idxKey = `idx_${otId}`;
-        let idx = [];
-        try {
-          idx = (await store.get(idxKey, { type: 'json' })) || [];
-        } catch (_) {
-          idx = [];
-        }
+        let idx = (await storeGetJSON(store, idxKey)) || [];
         if (!Array.isArray(idx)) idx = [];
         if (!idx.includes(key)) idx.push(key);
-        await store.setJSON(idxKey, idx);
+        await storeSetJSON(store, idxKey, idx);
       }
 
       return json(200, { ok: true, record });
@@ -83,29 +75,18 @@ exports.handler = async (event) => {
       const qs = event.queryStringParameters || {};
 
       if (qs.key) {
-        const key = sanitizeKey(qs.key);
-        let record = null;
-        try {
-          record = await store.get(key, { type: 'json' });
-        } catch (_) {}
-        return json(200, { ok: true, record: record || null });
+        const record = await storeGetJSON(store, sanitizeKey(qs.key));
+        return json(200, { ok: true, record });
       }
 
       if (qs.otId) {
         const otId = sanitizeKey(qs.otId);
-        let idx = [];
-        try {
-          idx = (await store.get(`idx_${otId}`, { type: 'json' })) || [];
-        } catch (_) {
-          idx = [];
-        }
+        let idx = (await storeGetJSON(store, `idx_${otId}`)) || [];
         if (!Array.isArray(idx)) idx = [];
         const records = [];
         for (const k of idx) {
-          try {
-            const r = await store.get(k, { type: 'json' });
-            if (r) records.push(r);
-          } catch (_) {}
+          const r = await storeGetJSON(store, k);
+          if (r) records.push(r);
         }
         return json(200, { ok: true, records });
       }
@@ -118,10 +99,8 @@ exports.handler = async (event) => {
           .slice(0, 80);
         const records = [];
         for (const k of keys) {
-          try {
-            const r = await store.get(k, { type: 'json' });
-            if (r) records.push(r);
-          } catch (_) {}
+          const r = await storeGetJSON(store, k);
+          if (r) records.push(r);
         }
         return json(200, { ok: true, records });
       }

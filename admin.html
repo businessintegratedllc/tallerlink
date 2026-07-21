@@ -81,9 +81,12 @@
     </p>
 
     <div class="msg info show" id="setupMsg">
-      1) En Netlify → Environment variables creá <code>ADMIN_SECRET</code> (una clave larga).<br />
-      2) Redeploy.<br />
-      3) Pegá esa misma clave abajo (se guarda solo en este navegador).
+      <strong>Si ves “blobs_unavailable”:</strong><br />
+      1) En Netlify el build debe ser <code>npm install --omit=dev</code> (ya está en netlify.toml)<br />
+      2) Variable <code>ADMIN_SECRET</code> guardada<br />
+      3) <strong>Deploys → Trigger deploy → Clear cache and deploy site</strong><br />
+      4) Usá la URL de Netlify (<code>https://….netlify.app/admin.html</code>), no un archivo local<br />
+      5) Pegá abajo la misma clave que en ADMIN_SECRET
     </div>
     <div class="msg" id="flash"></div>
 
