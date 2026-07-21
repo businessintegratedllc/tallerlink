@@ -1,9 +1,17 @@
 /**
- * TallerLink Billing — registro de talleres + planes + Stripe Checkout
+ * TallerLink Billing — registro + planes + pago con PayPal.me
  * Free / Pro / Body Shop
+ * PayPal: https://www.paypal.com/paypalme/RandallCastroR9
  */
 (function () {
   'use strict';
+
+  const PAYPAL = {
+    me: 'RandallCastroR9',
+    base: 'https://www.paypal.com/paypalme/RandallCastroR9',
+    // Si tenés WhatsApp de soporte para confirmar pagos:
+    supportWa: '', // ej. '50688887777' — opcional
+  };
 
   const PLANS = {
     free: {
@@ -37,9 +45,6 @@
         'Historial sin límite',
         'Soporte prioritario',
       ],
-      // Set in Netlify env or replace after creating Stripe Payment Links / Prices
-      priceEnv: 'PRICE_PRO',
-      paymentLinkEnv: 'PAYMENT_LINK_PRO',
     },
     bodyshop: {
       id: 'bodyshop',
@@ -55,8 +60,6 @@
         'Etapas de proyecto ilimitadas',
         'Ideal 2+ bahías de pintura',
       ],
-      priceEnv: 'PRICE_BODYSHOP',
-      paymentLinkEnv: 'PAYMENT_LINK_BODYSHOP',
     },
   };
 
@@ -77,11 +80,14 @@
       ownerName: '',
       phone: '',
       plan: 'free',
-      status: 'active', // active | past_due | canceled | trialing
+      status: 'active', // active | pending_payment | trialing | past_due | canceled
+      paymentMethod: 'paypal',
       customerId: '',
       subscriptionId: '',
       currentPeriodEnd: null,
       trialEndsAt: null,
+      lastPayment: null,
+      paymentHistory: [],
       otCreatedMonth: ym(),
       otCountMonth: 0,
       quoteCountMonth: 0,
@@ -107,6 +113,23 @@
       b.quoteCountMonth = 0;
       saveBilling(b);
     }
+    // trial expiry
+    if (b.status === 'trialing' && b.trialEndsAt && Date.now() > b.trialEndsAt) {
+      b.plan = 'free';
+      b.status = 'active';
+      b.trialEndsAt = null;
+      saveBilling(b);
+    }
+    // paid period end (soft)
+    if (
+      (b.plan === 'pro' || b.plan === 'bodyshop') &&
+      b.status === 'active' &&
+      b.currentPeriodEnd &&
+      Date.now() > b.currentPeriodEnd
+    ) {
+      b.status = 'past_due';
+      saveBilling(b);
+    }
     return b;
   }
 
@@ -115,11 +138,21 @@
   }
 
   function isPaid(b) {
-    return (b.plan === 'pro' || b.plan === 'bodyshop') && (b.status === 'active' || b.status === 'trialing');
+    return (
+      (b.plan === 'pro' || b.plan === 'bodyshop') &&
+      (b.status === 'active' || b.status === 'trialing')
+    );
+  }
+
+  function paypalUrl(amount) {
+    const n = Number(amount) || 0;
+    // paypal.me/USER/AMOUNT  (USD por defecto en muchos países)
+    return PAYPAL.base + '/' + n + 'USD';
   }
 
   const billing = {
     PLANS,
+    PAYPAL,
     get() {
       return rollMonth(loadBilling());
     },
@@ -132,6 +165,10 @@
     isPaid() {
       return isPaid(this.get());
     },
+    paypalLink(planId) {
+      const p = PLANS[planId] || PLANS.pro;
+      return paypalUrl(p.price);
+    },
     register({ email, ownerName, phone, shopName }) {
       const b = this.get();
       b.registered = true;
@@ -140,7 +177,6 @@
       b.phone = (phone || '').trim();
       b.createdAt = b.createdAt || Date.now();
       saveBilling(b);
-      // mirror into shop if empty
       try {
         const raw = JSON.parse(localStorage.getItem('tallerlink_v2') || '{}');
         raw.shop = raw.shop || {};
@@ -154,7 +190,6 @@
       const b = this.get();
       const plan = getPlan(b);
       if (plan.otLimit === Infinity) return { ok: true };
-      // count active OTs
       let active = 0;
       try {
         const raw = JSON.parse(localStorage.getItem('tallerlink_v2') || '{}');
@@ -163,7 +198,7 @@
       if (active >= plan.otLimit) {
         return {
           ok: false,
-          reason: `En el plan Free podés tener hasta ${plan.otLimit} vehículos activos. Pasá a Pro para ilimitados.`,
+          reason: `En Free podés tener hasta ${plan.otLimit} vehículos activos. Pasá a Pro (PayPal).`,
         };
       }
       return { ok: true, remaining: plan.otLimit - active };
@@ -175,7 +210,7 @@
       if (b.quoteCountMonth >= plan.quoteLimit) {
         return {
           ok: false,
-          reason: `Llegaste a ${plan.quoteLimit} cotizaciones este mes en Free. Actualizá a Pro.`,
+          reason: `Llegaste a ${plan.quoteLimit} cotizaciones este mes en Free. Actualizá a Pro con PayPal.`,
         };
       }
       return { ok: true, remaining: plan.quoteLimit - b.quoteCountMonth };
@@ -187,11 +222,24 @@
     },
     activatePlan(planId, meta = {}) {
       const b = this.get();
-      b.plan = PLANS[planId] ? planId : 'pro';
+      const plan = PLANS[planId] ? planId : 'pro';
+      b.plan = plan;
       b.status = meta.status || 'active';
+      b.paymentMethod = meta.paymentMethod || b.paymentMethod || 'paypal';
       b.customerId = meta.customerId || b.customerId;
       b.subscriptionId = meta.subscriptionId || b.subscriptionId;
-      b.currentPeriodEnd = meta.currentPeriodEnd || b.currentPeriodEnd;
+      if (meta.currentPeriodEnd) {
+        b.currentPeriodEnd = meta.currentPeriodEnd;
+      } else if (b.status === 'active' && plan !== 'free') {
+        // 30 días desde ahora
+        b.currentPeriodEnd = Date.now() + 30 * 86400000;
+      }
+      if (meta.lastPayment) b.lastPayment = meta.lastPayment;
+      if (meta.pushHistory) {
+        b.paymentHistory = b.paymentHistory || [];
+        b.paymentHistory.unshift(meta.pushHistory);
+        b.paymentHistory = b.paymentHistory.slice(0, 24);
+      }
       saveBilling(b);
       return b;
     },
@@ -200,77 +248,45 @@
       b.plan = 'pro';
       b.status = 'trialing';
       b.trialEndsAt = Date.now() + days * 86400000;
+      b.currentPeriodEnd = b.trialEndsAt;
       saveBilling(b);
       return b;
     },
-    async startCheckout(planId) {
-      const b = this.get();
-      if (!b.registered || !b.email) {
-        return { error: 'register_required' };
-      }
+    markPaidPaypal(planId, note) {
       const plan = PLANS[planId] || PLANS.pro;
-      const origin = location.origin;
-      const successUrl = origin + '/?billing=success&plan=' + encodeURIComponent(plan.id);
-      const cancelUrl = origin + '/?billing=cancel';
-
-      // 1) Try Netlify function (Stripe Checkout Session)
-      try {
-        const res = await fetch('/.netlify/functions/create-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            plan: plan.id,
-            email: b.email,
-            shopName: b.ownerName || '',
-            successUrl,
-            cancelUrl,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.url) {
-            location.href = data.url;
-            return { ok: true, method: 'checkout_session' };
-          }
-          if (data.paymentLink) {
-            location.href = data.paymentLink;
-            return { ok: true, method: 'payment_link' };
-          }
-        }
-      } catch (_) {
-        /* function not deployed or offline */
-      }
-
-      // 2) Payment Link from meta tag (optional hardcode for no-backend)
-      const linkMeta = document.querySelector(`meta[name="tl-payment-link-${plan.id}"]`);
-      if (linkMeta && linkMeta.content) {
-        const url = linkMeta.content + (linkMeta.content.includes('?') ? '&' : '?') +
-          'prefilled_email=' + encodeURIComponent(b.email) +
-          '&client_reference_id=' + encodeURIComponent(b.email);
-        location.href = url;
-        return { ok: true, method: 'meta_payment_link' };
-      }
-
-      // 3) Demo mode — activate without Stripe (for testing UX)
-      if (localStorage.getItem('tallerlink_demo_billing') === '1' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-        this.activatePlan(plan.id, { status: 'active' });
-        return { ok: true, method: 'demo_local' };
-      }
-
-      return {
-        error: 'stripe_not_configured',
-        message: 'Stripe aún no está configurado. Agregá las variables en Netlify o activá modo demo.',
+      const b = this.get();
+      const entry = {
+        at: Date.now(),
+        plan: plan.id,
+        amount: plan.price,
+        method: 'paypal',
+        note: (note || '').slice(0, 200),
+        email: b.email,
+        ownerName: b.ownerName,
       };
+      return this.activatePlan(plan.id, {
+        status: 'active',
+        paymentMethod: 'paypal',
+        lastPayment: entry,
+        pushHistory: entry,
+        currentPeriodEnd: Date.now() + 30 * 86400000,
+      });
     },
   };
 
   window.TLBilling = billing;
 
-  /* ─── UI injection ─── */
+  /* ─── UI ─── */
   function el(html) {
     const t = document.createElement('template');
     t.innerHTML = html.trim();
     return t.content.firstElementChild;
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    );
   }
 
   function injectStyles() {
@@ -284,11 +300,11 @@
       .bill-card h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:1.35rem;letter-spacing:-.02em;margin:.35rem 0 .5rem}
       .bill-card .lead{color:#8b98ab;font-size:.92rem;line-height:1.5;margin-bottom:1rem}
       .bill-card label{display:block;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#5f6d82;margin:0 0 .3rem}
-      .bill-card input{width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);border-radius:11px;padding:.7rem .85rem;margin-bottom:.75rem;color:#eef2f7;outline:none}
-      .bill-card input:focus{border-color:rgba(255,122,26,.5);box-shadow:0 0 0 3px rgba(255,122,26,.14)}
-      .plan-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.68rem;font-weight:700;padding:.25rem .55rem;border-radius:999px;background:rgba(255,122,26,.14);color:#ff7a1a;border:1px solid rgba(255,122,26,.3)}
-      .plan-badge.free{background:rgba(255,255,255,.06);color:#8b98ab;border-color:rgba(255,255,255,.1)}
+      .bill-card input,.bill-card textarea{width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);border-radius:11px;padding:.7rem .85rem;margin-bottom:.75rem;color:#eef2f7;outline:none;font:inherit}
+      .bill-card input:focus,.bill-card textarea:focus{border-color:rgba(255,122,26,.5);box-shadow:0 0 0 3px rgba(255,122,26,.14)}
+      .plan-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.68rem;font-weight:700;padding:.25rem .55rem;border-radius:999px;background:rgba(255,255,255,.06);color:#8b98ab;border:1px solid rgba(255,255,255,.1)}
       .plan-badge.pro,.plan-badge.bodyshop{background:rgba(61,220,151,.14);color:#3ddc97;border-color:rgba(61,220,151,.3)}
+      .plan-badge.pending{background:rgba(245,197,66,.14);color:#f5c542;border-color:rgba(245,197,66,.3)}
       .pricing-grid{display:grid;gap:1rem}
       @media(min-width:800px){.pricing-grid{grid-template-columns:repeat(3,1fr)}}
       .price-card{background:#1a2230;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:1.2rem;display:flex;flex-direction:column;gap:.5rem;position:relative}
@@ -305,6 +321,19 @@
       .bill-banner{display:none;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.75rem 1rem;margin-bottom:1rem;border-radius:12px;background:rgba(255,122,26,.1);border:1px solid rgba(255,122,26,.28);font-size:.88rem}
       .bill-banner.show{display:flex}
       .bill-banner.ok{background:rgba(61,220,151,.1);border-color:rgba(61,220,151,.28)}
+      .pp-bg{display:none;position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);padding:1rem;overflow:auto;place-items:center}
+      .pp-bg.show{display:grid}
+      .pp-sheet{width:min(100%,420px);background:#1a2230;border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+      .pp-sheet .hd{padding:1.1rem 1.2rem;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.2)}
+      .pp-sheet .hd h3{font-family:'Space Grotesk',system-ui,sans-serif;font-size:1.15rem;margin:0 0 .25rem}
+      .pp-sheet .hd p{margin:0;font-size:.84rem;color:#8b98ab;line-height:1.45}
+      .pp-sheet .bd{padding:1.1rem 1.2rem;display:grid;gap:.75rem}
+      .pp-steps{margin:0;padding-left:1.15rem;color:#8b98ab;font-size:.88rem;line-height:1.55}
+      .pp-steps li{margin:.25rem 0}
+      .pp-amt{font-family:'Space Grotesk',system-ui,sans-serif;font-size:1.75rem;font-weight:700;color:#ff7a1a}
+      .pp-note{font-size:.78rem;color:#5f6d82;line-height:1.4;padding:.65rem .75rem;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.22);border-radius:10px}
+      .btn-paypal{background:#0070ba;color:#fff}
+      .btn-paypal:hover{box-shadow:0 8px 24px rgba(0,112,186,.35)}
     `;
     document.head.appendChild(s);
   }
@@ -317,7 +346,7 @@
           <div class="bill-card">
             <div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ff7a1a">TallerLink</div>
             <h2>Registrá tu taller</h2>
-            <p class="lead">Creá tu cuenta gratis. Después podés subir a Pro cuando el flujo ya te esté sirviendo.</p>
+            <p class="lead">Creá tu cuenta gratis. Cuando quieras Pro, pagás por <strong>PayPal</strong> en 1 minuto.</p>
             <label>Tu nombre</label>
             <input id="regOwner" placeholder="Juan Martínez" autocomplete="name" />
             <label>Email del taller</label>
@@ -328,7 +357,7 @@
             <input id="regShop" placeholder="Taller Martínez" />
             <button type="button" class="btn btn-primary btn-block" id="regSubmit" style="margin-top:.35rem">Empezar gratis</button>
             <p style="font-size:.75rem;color:#5f6d82;margin-top:.85rem;line-height:1.4;text-align:center">
-              Plan Free incluido. Sin tarjeta para empezar.
+              Free sin tarjeta. Pro se paga con PayPal.
             </p>
           </div>
         </div>`);
@@ -343,7 +372,6 @@
           return;
         }
         billing.register({ email, ownerName, phone, shopName: shopName || 'Mi Taller' });
-        // update live shop name in UI if possible
         const sn = document.getElementById('sideShopName');
         if (sn && shopName) sn.textContent = shopName;
         const shopNameInput = document.getElementById('shopName');
@@ -351,7 +379,6 @@
         hideGate();
         paintBillingUI();
         if (window.toast) window.toast('Taller registrado · plan Free');
-        else alert('Listo. Ya podés usar TallerLink en Free.');
       };
     }
     gate.classList.add('show');
@@ -364,13 +391,14 @@
   function ensureNav() {
     const nav = document.querySelector('.side-nav');
     if (!nav || document.querySelector('[data-view="billing"]')) return;
-    const btn = el(`<button type="button" class="nav-btn" data-view="billing"><span class="ic">★</span> Plan y pago</button>`);
+    const btn = el(
+      `<button type="button" class="nav-btn" data-view="billing"><span class="ic">★</span> Plan y pago</button>`
+    );
     const settings = nav.querySelector('[data-view="settings"]');
     if (settings) nav.insertBefore(btn, settings);
     else nav.appendChild(btn);
     btn.addEventListener('click', () => {
       if (typeof window.__tlSetView === 'function') window.__tlSetView('billing');
-      else showBillingView();
     });
   }
 
@@ -379,7 +407,6 @@
     if (!content || document.getElementById('view-billing')) return;
     const sec = el(`
       <section id="view-billing" class="hidden">
-        <div id="billingBanner" class="bill-banner"></div>
         <div class="panel" style="margin-bottom:1rem">
           <div class="panel-h"><h2>Tu suscripción</h2><span class="plan-badge" id="planBadgeTop">Free</span></div>
           <div class="panel-b" id="billingSummary"></div>
@@ -389,13 +416,99 @@
           <div class="panel-b">
             <div class="pricing-grid" id="pricingGrid"></div>
             <p style="margin-top:1rem;font-size:.8rem;color:#5f6d82;line-height:1.45">
-              El pago lo procesa <strong>Stripe</strong> (tarjeta). TallerLink no guarda los datos de tu tarjeta.
-              Podés cancelar cuando quieras desde el portal de cliente (Pro).
+              El pago se hace con <strong>PayPal</strong>
+              (<a href="${PAYPAL.base}" target="_blank" rel="noopener" style="color:#5eb1ff">paypal.me/${PAYPAL.me}</a>.
+              Después tocá <strong>Ya pagué</strong> para activar el plan. Renová cada mes desde aquí.
             </p>
           </div>
         </div>
       </section>`);
     content.appendChild(sec);
+  }
+
+  function ensurePaypalModal() {
+    if (document.getElementById('ppBg')) return;
+    const m = el(`
+      <div class="pp-bg" id="ppBg" aria-hidden="true">
+        <div class="pp-sheet" role="dialog" aria-modal="true">
+          <div class="hd">
+            <h3 id="ppTitle">Pagar con PayPal</h3>
+            <p id="ppSub">Plan Pro</p>
+          </div>
+          <div class="bd">
+            <div class="pp-amt" id="ppAmt">$29</div>
+            <ol class="pp-steps">
+              <li>Tocá <strong>Abrir PayPal</strong> y completá el pago de la suscripción mensual.</li>
+              <li>En el concepto / nota poné tu <strong>email del taller</strong> (así lo identificamos).</li>
+              <li>Volvé acá y tocá <strong>Ya pagué — activar plan</strong>.</li>
+            </ol>
+            <div class="pp-note">
+              PayPal: <strong>paypal.me/${PAYPAL.me}</strong><br/>
+              Monto exacto del plan. Si PayPal pide moneda, usá <strong>USD</strong>.
+            </div>
+            <label style="font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#5f6d82">Nota opcional (ID de transacción)</label>
+            <input id="ppTxn" placeholder="Ej. código de PayPal o 'pagado 21/7'" maxlength="120" />
+            <a class="btn btn-paypal btn-lg btn-block" id="ppOpen" href="#" target="_blank" rel="noopener">Abrir PayPal y pagar</a>
+            <button type="button" class="btn btn-primary btn-block" id="ppPaid">Ya pagué — activar plan</button>
+            <button type="button" class="btn btn-ghost btn-block" id="ppCopy">Copiar link de PayPal</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-block" id="ppClose">Cancelar</button>
+          </div>
+        </div>
+      </div>`);
+    document.body.appendChild(m);
+
+    m.querySelector('#ppClose').onclick = closePaypalModal;
+    m.addEventListener('click', (e) => {
+      if (e.target === m) closePaypalModal();
+    });
+    m.querySelector('#ppCopy').onclick = async () => {
+      const url = m.querySelector('#ppOpen').href;
+      try {
+        await navigator.clipboard.writeText(url);
+        if (window.toast) window.toast('Link PayPal copiado');
+        else alert('Copiado: ' + url);
+      } catch {
+        prompt('Copiá este link:', url);
+      }
+    };
+    m.querySelector('#ppPaid').onclick = () => {
+      const planId = m.dataset.plan || 'pro';
+      const note = m.querySelector('#ppTxn').value.trim();
+      billing.markPaidPaypal(planId, note);
+      closePaypalModal();
+      paintBillingUI();
+      if (window.toast) window.toast('Plan ' + (PLANS[planId]?.name || planId) + ' activado · PayPal');
+      alert(
+        'Plan activado.\n\n' +
+          'Si todavía no se refleja el pago en PayPal, lo revisamos manualmente.\n' +
+          'Email de tu cuenta: ' +
+          (billing.get().email || '—') +
+          '\n\nRenovación: dentro de 30 días volvé a Plan y pago.'
+      );
+      if (window.__tlSetView) window.__tlSetView('billing');
+    };
+  }
+
+  function openPaypalModal(planId) {
+    ensurePaypalModal();
+    const plan = PLANS[planId] || PLANS.pro;
+    const m = document.getElementById('ppBg');
+    m.dataset.plan = plan.id;
+    m.querySelector('#ppTitle').textContent = 'Pagar ' + plan.name + ' con PayPal';
+    m.querySelector('#ppSub').textContent =
+      'Suscripción mensual · ' + plan.priceLabel + plan.period + ' · paypal.me/' + PAYPAL.me;
+    m.querySelector('#ppAmt').textContent = plan.priceLabel + ' USD';
+    m.querySelector('#ppOpen').href = paypalUrl(plan.price);
+    m.querySelector('#ppTxn').value = '';
+    m.classList.add('show');
+    m.setAttribute('aria-hidden', 'false');
+  }
+
+  function closePaypalModal() {
+    const m = document.getElementById('ppBg');
+    if (!m) return;
+    m.classList.remove('show');
+    m.setAttribute('aria-hidden', 'true');
   }
 
   function usageBlock(b) {
@@ -409,14 +522,34 @@
     const qLim = plan.quoteLimit === Infinity ? null : plan.quoteLimit;
     const otPct = otLim ? Math.min(100, Math.round((active / otLim) * 100)) : 0;
     const qPct = qLim ? Math.min(100, Math.round(((b.quoteCountMonth || 0) / qLim) * 100)) : 0;
+    const period =
+      b.currentPeriodEnd && (b.plan === 'pro' || b.plan === 'bodyshop')
+        ? '<br>Válido hasta: <strong style="color:#eef2f7">' +
+          new Date(b.currentPeriodEnd).toLocaleDateString('es') +
+          '</strong>'
+        : '';
+    const last =
+      b.lastPayment && b.lastPayment.at
+        ? '<br>Último pago PayPal: ' +
+          new Date(b.lastPayment.at).toLocaleDateString('es') +
+          ' · $' +
+          (b.lastPayment.amount || '') +
+          (b.lastPayment.note ? ' · ' + esc(b.lastPayment.note) : '')
+        : '';
     return `
       <div class="row2">
         <div>
-          <div style="font-size:.8rem;color:#8b98ab">Vehículos activos ${otLim ? active + ' / ' + otLim : active + ' · ilimitados'}</div>
+          <div style="font-size:.8rem;color:#8b98ab">Vehículos activos ${
+            otLim ? active + ' / ' + otLim : active + ' · ilimitados'
+          }</div>
           ${otLim ? `<div class="usage-bar"><i style="width:${otPct}%"></i></div>` : ''}
         </div>
         <div>
-          <div style="font-size:.8rem;color:#8b98ab">Cotizaciones este mes ${qLim ? (b.quoteCountMonth || 0) + ' / ' + qLim : (b.quoteCountMonth || 0) + ' · ilimitadas'}</div>
+          <div style="font-size:.8rem;color:#8b98ab">Cotizaciones este mes ${
+            qLim
+              ? (b.quoteCountMonth || 0) + ' / ' + qLim
+              : (b.quoteCountMonth || 0) + ' · ilimitadas'
+          }</div>
           ${qLim ? `<div class="usage-bar"><i style="width:${qPct}%"></i></div>` : ''}
         </div>
       </div>
@@ -424,24 +557,23 @@
         Cuenta: <strong style="color:#eef2f7">${esc(b.email || '—')}</strong>
         ${b.ownerName ? ' · ' + esc(b.ownerName) : ''}
         ${b.status === 'trialing' && b.trialEndsAt ? '<br>Prueba Pro hasta ' + new Date(b.trialEndsAt).toLocaleDateString('es') : ''}
-        ${b.currentPeriodEnd ? '<br>Próximo cobro / fin de periodo: ' + new Date(b.currentPeriodEnd).toLocaleDateString('es') : ''}
+        ${b.status === 'past_due' ? '<br><span style="color:#f5c542">Periodo vencido — renovà con PayPal</span>' : ''}
+        ${period}${last}
       </p>
     `;
-  }
-
-  function esc(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   function paintBillingUI() {
     const b = billing.get();
     ensureNav();
     ensureView();
+    ensurePaypalModal();
 
-    // sidebar badge
     const foot = document.querySelector('.side-foot');
     if (foot && !document.getElementById('planBadgeSide')) {
-      const badge = el(`<span class="plan-badge free" id="planBadgeSide" style="margin-top:.45rem">Free</span>`);
+      const badge = el(
+        `<span class="plan-badge free" id="planBadgeSide" style="margin-top:.45rem">Free</span>`
+      );
       foot.appendChild(badge);
     }
     const sideBadge = document.getElementById('planBadgeSide');
@@ -449,18 +581,31 @@
     const plan = getPlan(b);
     [sideBadge, topBadge].forEach((node) => {
       if (!node) return;
-      node.textContent = plan.name + (b.status === 'trialing' ? ' (prueba)' : '');
-      node.className = 'plan-badge ' + plan.id;
+      let label = plan.name;
+      if (b.status === 'trialing') label += ' (prueba)';
+      if (b.status === 'past_due') label += ' (vencer)';
+      node.textContent = label;
+      node.className =
+        'plan-badge ' +
+        (b.status === 'past_due' ? 'pending' : plan.id === 'free' ? 'free' : plan.id);
     });
 
     const summary = document.getElementById('billingSummary');
     if (summary) {
-      summary.innerHTML = usageBlock(b) + `
+      const paid = isPaid(b);
+      const needsRenew = b.status === 'past_due' || (paid && b.currentPeriodEnd && b.currentPeriodEnd - Date.now() < 5 * 86400000);
+      summary.innerHTML =
+        usageBlock(b) +
+        `
         <div style="display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem">
-          ${!isPaid(b) ? `<button type="button" class="btn btn-primary" data-checkout="pro">Mejorar a Pro — $29/mes</button>
-          <button type="button" class="btn btn-ghost" data-trial="1">Probar Pro 14 días</button>` : `
-          <button type="button" class="btn btn-ghost" id="btnPortal">Gestionar suscripción</button>
-          <button type="button" class="btn btn-soft" data-checkout="bodyshop">Subir a Body Shop</button>`}
+          ${
+            !paid
+              ? `<button type="button" class="btn btn-primary" data-checkout="pro">Mejorar a Pro — $29/mes (PayPal)</button>
+          <button type="button" class="btn btn-ghost" data-trial="1">Probar Pro 14 días</button>`
+              : `<button type="button" class="btn btn-paypal" data-checkout="${b.plan === 'bodyshop' ? 'bodyshop' : 'pro'}">${needsRenew ? 'Renovar con PayPal' : 'Pagar próximo mes'}</button>
+          <button type="button" class="btn btn-soft" data-checkout="bodyshop">Body Shop $49</button>
+          <a class="btn btn-ghost" href="${PAYPAL.base}" target="_blank" rel="noopener">Abrir mi PayPal.me</a>`
+          }
         </div>`;
       summary.querySelectorAll('[data-checkout]').forEach((btn) => {
         btn.onclick = () => startCheckoutFlow(btn.dataset.checkout);
@@ -470,28 +615,30 @@
         paintBillingUI();
         if (window.toast) window.toast('Prueba Pro 14 días activada');
       });
-      summary.querySelector('#btnPortal')?.addEventListener('click', openPortal);
     }
 
     const grid = document.getElementById('pricingGrid');
     if (grid) {
-      grid.innerHTML = ['free', 'pro', 'bodyshop'].map((id) => {
-        const p = PLANS[id];
-        const current = b.plan === id;
-        return `
+      grid.innerHTML = ['free', 'pro', 'bodyshop']
+        .map((id) => {
+          const p = PLANS[id];
+          const current = b.plan === id && (b.status === 'active' || b.status === 'trialing');
+          return `
           <div class="price-card ${id === 'pro' ? 'featured' : ''}">
             ${id === 'pro' ? '<span class="tag">Recomendado</span>' : ''}
             <h3>${esc(p.name)}</h3>
             <div class="amt">${esc(p.priceLabel)} <small>${esc(p.period)}</small></div>
             <ul>${p.features.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
-            ${current
-              ? `<button type="button" class="btn btn-ghost btn-block" disabled>Plan actual</button>`
-              : id === 'free'
-                ? `<button type="button" class="btn btn-ghost btn-block" data-downgrade="1">Quedarme en Free</button>`
-                : `<button type="button" class="btn btn-primary btn-block" data-checkout="${id}">Suscribirme</button>`
+            ${
+              current
+                ? `<button type="button" class="btn btn-ghost btn-block" disabled>Plan actual</button>`
+                : id === 'free'
+                  ? `<button type="button" class="btn btn-ghost btn-block" data-downgrade="1">Quedarme en Free</button>`
+                  : `<button type="button" class="btn btn-primary btn-block" data-checkout="${id}">Pagar con PayPal</button>`
             }
           </div>`;
-      }).join('');
+        })
+        .join('');
       grid.querySelectorAll('[data-checkout]').forEach((btn) => {
         btn.onclick = () => startCheckoutFlow(btn.dataset.checkout);
       });
@@ -502,7 +649,6 @@
       });
     }
 
-    // limit banner on dashboard
     paintLimitBanner();
   }
 
@@ -519,17 +665,18 @@
     const q = billing.canSendQuote();
     if (isPaid(b)) {
       banner.className = 'bill-banner ok show';
-      banner.innerHTML = `<span>Plan <strong>${esc(getPlan(b).name)}</strong> activo · vehículos y cotizaciones ilimitados.</span>
+      banner.innerHTML = `<span>Plan <strong>${esc(getPlan(b).name)}</strong> activo · pago por PayPal.</span>
         <button type="button" class="btn btn-ghost btn-sm" data-go-bill="1">Ver plan</button>`;
     } else if (!ot.ok || !q.ok) {
       banner.className = 'bill-banner show';
       banner.innerHTML = `<span>${esc((!ot.ok && ot.reason) || q.reason)}</span>
-        <button type="button" class="btn btn-primary btn-sm" data-checkout="pro">Pasar a Pro</button>`;
+        <button type="button" class="btn btn-primary btn-sm" data-checkout="pro">Pagar Pro</button>`;
     } else {
-      const plan = getPlan(b);
       banner.className = 'bill-banner show';
-      banner.innerHTML = `<span>Plan Free · ${ot.remaining != null ? ot.remaining + ' cupos de vehículos' : ''} ${q.remaining != null ? '· ' + q.remaining + ' cotizaciones este mes' : ''}</span>
-        <button type="button" class="btn btn-soft btn-sm" data-checkout="pro">Mejorar plan</button>`;
+      banner.innerHTML = `<span>Plan Free · ${
+        ot.remaining != null ? ot.remaining + ' cupos vehículos' : ''
+      } ${q.remaining != null ? '· ' + q.remaining + ' cotiz. este mes' : ''}</span>
+        <button type="button" class="btn btn-soft btn-sm" data-checkout="pro">Mejorar con PayPal</button>`;
     }
     banner.querySelectorAll('[data-checkout]').forEach((btn) => {
       btn.onclick = () => startCheckoutFlow(btn.dataset.checkout);
@@ -539,115 +686,107 @@
     });
   }
 
-  async function startCheckoutFlow(planId) {
+  function startCheckoutFlow(planId) {
     const b = billing.get();
     if (!b.registered) {
       showGate();
       return;
     }
-    if (window.toast) window.toast('Conectando con Stripe…');
-    const res = await billing.startCheckout(planId);
-    if (res.error === 'register_required') {
-      showGate();
-      return;
-    }
-    if (res.method === 'demo_local') {
-      paintBillingUI();
-      if (window.toast) window.toast('Plan ' + planId + ' activado (modo demo local)');
-      alert('Modo demo: plan ' + planId + ' activado sin cobro real.\n\nEn producción esto abre Stripe Checkout.');
-      return;
-    }
-    if (res.error === 'stripe_not_configured') {
-      alert(
-        'Stripe no está configurado todavía.\n\n' +
-          '1) Creá productos en Stripe\n' +
-          '2) En Netlify agregá STRIPE_SECRET_KEY y PRICE_PRO\n' +
-          '3) O poné meta tl-payment-link-pro con tu Payment Link\n\n' +
-          'Para probar la UX ahora:\nlocalStorage.setItem("tallerlink_demo_billing","1") y reintentá.'
-      );
-      return;
-    }
-    if (res.error) {
-      alert(res.message || 'No se pudo iniciar el pago');
-    }
+    if (planId === 'free') return;
+    openPaypalModal(planId || 'pro');
   }
 
-  async function openPortal() {
-    const b = billing.get();
-    try {
-      const res = await fetch('/.netlify/functions/create-portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: b.customerId, email: b.email }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.url) {
-          location.href = data.url;
-          return;
-        }
-      }
-    } catch (_) {}
-    alert('El portal de cliente se activa cuando Stripe y el customerId estén configurados.');
-  }
-
-  function handleReturnFromStripe() {
+  function boot() {
+    if (new URLSearchParams(location.search).get('c')) return;
+    injectStyles();
+    // legacy stripe return URLs still activate plan if someone used old flow
     const params = new URLSearchParams(location.search);
-    const billingParam = params.get('billing');
-    if (!billingParam) return;
-    if (billingParam === 'success') {
-      const plan = params.get('plan') || 'pro';
-      // Prefer server verification
-      const sessionId = params.get('session_id');
-      if (sessionId) {
-        fetch('/.netlify/functions/verify-session?session_id=' + encodeURIComponent(sessionId))
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.ok) {
-              billing.activatePlan(data.plan || plan, {
-                status: 'active',
-                customerId: data.customerId,
-                subscriptionId: data.subscriptionId,
-                currentPeriodEnd: data.currentPeriodEnd,
-              });
-            } else {
-              billing.activatePlan(plan, { status: 'active' });
-            }
-            paintBillingUI();
-            cleanupUrl();
-            if (window.toast) window.toast('¡Suscripción activa!');
-            if (window.__tlSetView) window.__tlSetView('billing');
-          })
-          .catch(() => {
-            billing.activatePlan(plan, { status: 'active' });
-            paintBillingUI();
-            cleanupUrl();
-          });
-      } else {
-        billing.activatePlan(plan, { status: 'active' });
-        paintBillingUI();
-        cleanupUrl();
-        if (window.toast) window.toast('¡Pago recibido · plan activado!');
-        if (window.__tlSetView) window.__tlSetView('billing');
+    if (params.get('billing') === 'success') {
+      billing.activatePlan(params.get('plan') || 'pro', { status: 'active', paymentMethod: 'paypal' });
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete('billing');
+        u.searchParams.delete('plan');
+        u.searchParams.delete('session_id');
+        history.replaceState({}, '', u.pathname + u.search + u.hash);
+      } catch (_) {}
+    }
+
+    ensureNav();
+    ensureView();
+    paintBillingUI();
+
+    document.querySelectorAll('.nav-btn').forEach((btn) => {
+      btn.addEventListener('click', () => setTimeout(paintLimitBanner, 50));
+    });
+
+    const prev = window.__tlSetView;
+    window.__tlSetView = function (name) {
+      if (typeof prev === 'function' && name !== 'billing') {
+        // let main app handle non-billing if it was the original setView
       }
-    }
-    if (billingParam === 'cancel') {
-      cleanupUrl();
-      if (window.toast) window.toast('Pago cancelado · seguís en Free');
-    }
+      document.querySelectorAll('.nav-btn').forEach((b) =>
+        b.classList.toggle('on', b.dataset.view === name)
+      );
+      ['dashboard', 'vehicles', 'board', 'quotes', 'settings', 'billing'].forEach((v) => {
+        document.getElementById('view-' + v)?.classList.toggle('hidden', v !== name);
+      });
+      const title = document.getElementById('pageTitle');
+      if (title) {
+        title.textContent =
+          {
+            dashboard: 'Inicio',
+            vehicles: 'Vehículos en el taller',
+            board: 'Cola del taller',
+            quotes: 'Cotizaciones',
+            settings: 'Mi taller',
+            billing: 'Plan y pago',
+          }[name] || 'TallerLink';
+      }
+      document.getElementById('sidebar')?.classList.remove('open');
+      document.getElementById('scrim')?.classList.remove('show');
+      if (name === 'billing') paintBillingUI();
+      if (name === 'dashboard') paintLimitBanner();
+      if (typeof prev === 'function' && name !== 'billing') {
+        try {
+          prev(name);
+        } catch (_) {}
+      }
+    };
+
+    document.querySelector('[data-view="billing"]')?.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        window.__tlSetView('billing');
+      },
+      true
+    );
+
+    if (!billing.get().registered) setTimeout(showGate, 400);
+    setTimeout(hookAppButtons, 0);
+    setTimeout(hookAppButtons, 500);
   }
 
-  function cleanupUrl() {
-    try {
-      const u = new URL(location.href);
-      u.searchParams.delete('billing');
-      u.searchParams.delete('plan');
-      u.searchParams.delete('session_id');
-      history.replaceState({}, '', u.pathname + u.search + u.hash);
-    } catch (_) {}
+  function hookAppButtons() {
+    ['btnNewOT', 'btnNewOT2', 'quickOT'].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (!btn || btn.dataset.billHooked) return;
+      btn.dataset.billHooked = '1';
+      btn.addEventListener(
+        'click',
+        (e) => {
+          if (!window.TLBillingGuard.beforeNewOT()) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+          }
+        },
+        true
+      );
+    });
   }
 
-  /* Hooks for main app */
   window.TLBillingGuard = {
     beforeNewOT() {
       const b = billing.get();
@@ -683,101 +822,6 @@
     },
   };
 
-  function patchSetView() {
-    // Wrap navigation if app exposes nothing — observe nav clicks
-    document.querySelectorAll('.nav-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        setTimeout(paintLimitBanner, 50);
-      });
-    });
-  }
-
-  function boot() {
-    // Don't show gate on public client view
-    if (new URLSearchParams(location.search).get('c')) return;
-    injectStyles();
-    handleReturnFromStripe();
-    const b = billing.get();
-    ensureNav();
-    ensureView();
-    paintBillingUI();
-    patchSetView();
-
-    // Patch existing setView by intercepting nav
-    const origNav = document.querySelectorAll('.nav-btn');
-    origNav.forEach((btn) => {
-      const v = btn.dataset.view;
-      if (v === 'billing') return;
-      btn.addEventListener('click', () => {
-        document.getElementById('view-billing')?.classList.add('hidden');
-      });
-    });
-
-    // Custom setView helper
-    window.__tlSetView = function (name) {
-      document.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
-      ['dashboard', 'vehicles', 'board', 'quotes', 'settings', 'billing'].forEach((v) => {
-        document.getElementById('view-' + v)?.classList.toggle('hidden', v !== name);
-      });
-      const title = document.getElementById('pageTitle');
-      if (title) {
-        title.textContent =
-          {
-            dashboard: 'Inicio',
-            vehicles: 'Vehículos en el taller',
-            board: 'Cola del taller',
-            quotes: 'Cotizaciones',
-            settings: 'Mi taller',
-            billing: 'Plan y pago',
-          }[name] || 'TallerLink';
-      }
-      document.getElementById('sidebar')?.classList.remove('open');
-      document.getElementById('scrim')?.classList.remove('show');
-      if (name === 'billing') paintBillingUI();
-      if (name === 'dashboard') paintLimitBanner();
-      // trigger original renders lightly
-      if (name !== 'billing') {
-        const nb = document.querySelector(`.nav-btn[data-view="${name}"]`);
-        // already on
-      }
-    };
-
-    document.querySelector('[data-view="billing"]')?.addEventListener('click', (e) => {
-      e.stopImmediatePropagation();
-      window.__tlSetView('billing');
-    });
-
-    if (!b.registered) {
-      // slight delay so app paints first
-      setTimeout(showGate, 400);
-    }
-
-    // Monkey-patch buttons after app binds
-    setTimeout(hookAppButtons, 0);
-    setTimeout(hookAppButtons, 500);
-  }
-
-  function hookAppButtons() {
-    const newOt = document.getElementById('btnNewOT');
-    const newOt2 = document.getElementById('btnNewOT2');
-    const quick = document.getElementById('quickOT');
-    [newOt, newOt2, quick].forEach((btn) => {
-      if (!btn || btn.dataset.billHooked) return;
-      btn.dataset.billHooked = '1';
-      btn.addEventListener(
-        'click',
-        (e) => {
-          if (!window.TLBillingGuard.beforeNewOT()) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
-          }
-        },
-        true
-      );
-    });
-  }
-
-  // Expose paint for after quote send — app can call
   window.TLBillingPaint = paintBillingUI;
 
   if (document.readyState === 'loading') {
