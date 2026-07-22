@@ -71,6 +71,18 @@ Netlify → Import repo → publish directory `.` → Deploy.
 
 ---
 
+## Mismo taller en PC y celular
+
+Usá el **mismo email de registro** en ambos. Los datos se sincronizan en la nube.
+
+Detalle: [`docs/SYNC-DISPOSITIVOS.md`](docs/SYNC-DISPOSITIVOS.md)
+
+## Instalar como app (PWA)
+
+En el celular: abrí [tallerlink.netlify.app](https://tallerlink.netlify.app) → **Instalar app** / “Añadir a pantalla de inicio”.
+
+Guía completa (PWA + Play Store + App Store): [`docs/CONVERTIR-EN-APP.md`](docs/CONVERTIR-EN-APP.md)
+
 ## Plan de negocio y ejecución
 
 - **Plan completo (90 días → 12 meses → $1M):** [`docs/PLAN-COMPLETO.md`](docs/PLAN-COMPLETO.md)

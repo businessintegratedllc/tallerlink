@@ -9,8 +9,11 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
   <link rel="manifest" href="/site.webmanifest" />
   <meta name="theme-color" content="#0b0e13" />
-<meta name="description" content="Ingresá el carro, cotizá, pedí aprobación por WhatsApp, mirá la cola de mecánica y pintura, y manejá presupuestos de proyecto. Hecho para dueños de taller." />
-  <meta name="theme-color" content="#0b0e13" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TallerLink" />
+  <meta name="description" content="Ingresá el carro, cotizá, pedí aprobación por WhatsApp, mirá la cola de mecánica y pintura, y manejá presupuestos de proyecto. Hecho para dueños de taller." />
   <meta property="og:title" content="TallerLink — Ingreso, cotización, cola y presupuestos" />
   <meta property="og:description" content="El sistema simple del taller chico. WhatsApp incluido." />
   <meta property="og:type" content="website" />
@@ -897,6 +900,7 @@
 
     /* ─── state ─── */
     const state = {
+      dataUpdatedAt: 0,
       shop: {
         name: 'Mi Taller',
         phone: '',
@@ -1020,22 +1024,169 @@
     }
 
     /* ─── persist ─── */
+    function getDeviceId() {
+      try {
+        let id = localStorage.getItem('tl_device_id');
+        if (!id) {
+          id = 'd_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          localStorage.setItem('tl_device_id', id);
+        }
+        return id;
+      } catch {
+        return 'd_unknown';
+      }
+    }
+
+    function getShopEmail() {
+      try {
+        const b = JSON.parse(localStorage.getItem('tallerlink_billing_v1') || 'null');
+        if (b && b.email) return String(b.email).trim().toLowerCase();
+      } catch (_) {}
+      return '';
+    }
+
+    function snapshotData() {
+      return {
+        shop: state.shop,
+        ots: state.ots,
+        updatedAt: state.dataUpdatedAt || Date.now(),
+      };
+    }
+
+    function applySnapshot(d, fromCloud) {
+      if (!d) return;
+      if (d.shop) state.shop = { ...state.shop, ...d.shop };
+      if (Array.isArray(d.ots)) state.ots = d.ots;
+      if (d.updatedAt) state.dataUpdatedAt = d.updatedAt;
+      if (fromCloud) {
+        try {
+          localStorage.setItem('tallerlink_v2', JSON.stringify({
+            shop: state.shop,
+            ots: state.ots,
+            updatedAt: state.dataUpdatedAt,
+          }));
+        } catch (_) {}
+      }
+    }
+
     function save() {
+      state.dataUpdatedAt = Date.now();
       try {
         localStorage.setItem('tallerlink_v2', JSON.stringify({
           shop: state.shop,
           ots: state.ots,
+          updatedAt: state.dataUpdatedAt,
         }));
       } catch (_) {}
+      // Subir a la nube (PC ↔ celular con el mismo email de registro)
+      scheduleCloudPush();
     }
+
     function load() {
       try {
         const d = JSON.parse(localStorage.getItem('tallerlink_v2') || 'null');
         if (!d) return;
-        if (d.shop) state.shop = { ...state.shop, ...d.shop };
-        if (Array.isArray(d.ots)) state.ots = d.ots;
+        applySnapshot(d, false);
       } catch (_) {}
     }
+
+    let _cloudTimer = null;
+    let _cloudBusy = false;
+    let _lastCloudPull = 0;
+
+    function scheduleCloudPush() {
+      clearTimeout(_cloudTimer);
+      _cloudTimer = setTimeout(() => { cloudPush().catch(() => {}); }, 600);
+    }
+
+    async function cloudPush(force) {
+      const email = getShopEmail();
+      if (!email) return { skipped: true, reason: 'no_email' };
+      if (_cloudBusy) return { skipped: true, reason: 'busy' };
+      _cloudBusy = true;
+      try {
+        const res = await fetch('/.netlify/functions/shop-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            data: { shop: state.shop, ots: state.ots },
+            updatedAt: state.dataUpdatedAt || Date.now(),
+            deviceId: getDeviceId(),
+            force: !!force,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          return { ok: false, error: err };
+        }
+        const data = await res.json();
+        if (data.conflict && data.data) {
+          // Servidor más nuevo → adoptar nube
+          applySnapshot({
+            shop: data.data.shop,
+            ots: data.data.ots,
+            updatedAt: data.updatedAt,
+          }, true);
+          refreshAll();
+          const sn = document.getElementById('sideShopName');
+          if (sn) sn.textContent = state.shop.name || 'Mi Taller';
+          return { ok: true, conflict: true, pulled: true };
+        }
+        if (data.updatedAt) state.dataUpdatedAt = data.updatedAt;
+        return { ok: true, saved: true };
+      } catch (e) {
+        return { ok: false, error: String(e.message || e) };
+      } finally {
+        _cloudBusy = false;
+      }
+    }
+
+    async function cloudPull(opts) {
+      const silent = !opts || opts.silent !== false;
+      const email = getShopEmail();
+      if (!email) return { skipped: true };
+      try {
+        const res = await fetch(
+          '/.netlify/functions/shop-sync?email=' + encodeURIComponent(email)
+        );
+        if (!res.ok) return { ok: false };
+        const data = await res.json();
+        if (data.empty || !data.data) return { ok: true, empty: true };
+
+        const serverAt = data.updatedAt || 0;
+        const localAt = state.dataUpdatedAt || 0;
+
+        // Si local es más nuevo, subir
+        if (localAt > serverAt && (state.ots.length || state.shop)) {
+          return cloudPush(false);
+        }
+        // Si servidor es más nuevo o igual con más data, bajar
+        if (serverAt >= localAt) {
+          const before = JSON.stringify({ o: state.ots.length, s: state.shop.name });
+          applySnapshot({
+            shop: data.data.shop,
+            ots: data.data.ots,
+            updatedAt: serverAt,
+          }, true);
+          const after = JSON.stringify({ o: state.ots.length, s: state.shop.name });
+          if (before !== after) {
+            refreshAll();
+            const sn = document.getElementById('sideShopName');
+            if (sn) sn.textContent = state.shop.name || 'Mi Taller';
+            if (!silent) toast('Datos sincronizados desde la nube');
+            return { ok: true, pulled: true, changed: true };
+          }
+        }
+        _lastCloudPull = Date.now();
+        return { ok: true, pulled: false };
+      } catch (e) {
+        return { ok: false, error: String(e.message || e) };
+      }
+    }
+
+    window.tlCloudPull = cloudPull;
+    window.tlCloudPush = cloudPush;
 
     /* ─── seed demo if empty ─── */
     function seedIfEmpty() {
@@ -2372,6 +2523,17 @@ ${link}`;
       $('#sideShopName').textContent = state.shop.name;
       setView('dashboard');
 
+      // Nube: mismo email de registro = mismos datos en PC y celular
+      cloudPull({ silent: true }).then((r) => {
+        if (r && r.changed) toast('Taller sincronizado con la nube');
+        // Si hay datos locales y nube vacía, subir
+        else if (getShopEmail() && state.ots.length) cloudPush(true);
+      });
+      setInterval(() => {
+        if (document.hidden) return;
+        cloudPull({ silent: true });
+      }, 15000);
+
       // Sincronizar aprobaciones del cliente (otro dispositivo) al abrir y cada 12s
       syncDecisionsFromServer({ silent: true });
       setInterval(() => {
@@ -2389,12 +2551,13 @@ ${link}`;
         b.className = 'btn btn-ghost btn-sm';
         b.id = 'btnSyncDecisions';
         b.textContent = '↻ Sync';
-        b.title = 'Buscar aprobaciones del cliente';
+        b.title = 'Sincronizar nube + aprobaciones del cliente';
         b.onclick = async () => {
           b.disabled = true;
           b.textContent = '…';
+          const cloud = await cloudPull({ silent: false });
           const n = await syncDecisionsFromServer({ silent: false });
-          if (!n) toast('Sin cambios nuevos');
+          if (!n && !(cloud && cloud.changed)) toast('Todo al día');
           b.disabled = false;
           b.textContent = '↻ Sync';
         };
@@ -2426,5 +2589,6 @@ ${link}`;
   </style>
 
   <script src="/js/billing.js" defer></script>
+  <script src="/js/pwa.js" defer></script>
 </body>
 </html>

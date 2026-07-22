@@ -51,3 +51,16 @@
   for = "/js/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/site.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Type = "application/manifest+json"

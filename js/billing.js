@@ -467,7 +467,19 @@
         if (shopNameInput && shopName) shopNameInput.value = shopName;
         hideGate();
         paintBillingUI();
-        if (window.toast) window.toast('Taller registrado · plan Free');
+        if (window.toast) window.toast('Taller registrado · sincronizando…');
+        // Mismo email en PC y celular = mismos carros (nube)
+        setTimeout(function () {
+          if (typeof window.tlCloudPull === 'function') {
+            window.tlCloudPull({ silent: false }).then(function (r) {
+              if (r && r.changed) {
+                if (window.toast) window.toast('Datos del taller cargados en este dispositivo');
+              } else if (typeof window.tlCloudPush === 'function') {
+                window.tlCloudPush(true);
+              }
+            });
+          }
+        }, 300);
       };
     }
     gate.classList.add('show');
