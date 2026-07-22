@@ -1058,12 +1058,27 @@
       if (d.shop) state.shop = { ...state.shop, ...d.shop };
       if (Array.isArray(d.ots)) state.ots = d.ots;
       if (d.updatedAt) state.dataUpdatedAt = d.updatedAt;
+      // Restaurar cuenta del taller (para no pedir registro otra vez en el celular)
+      if (d.billing && typeof d.billing === 'object' && d.billing.email) {
+        try {
+          const prev = JSON.parse(localStorage.getItem('tallerlink_billing_v1') || '{}') || {};
+          const merged = Object.assign({}, prev, d.billing, { registered: true });
+          // no pisar contadores locales más altos del mes actual si existen
+          if ((prev.quoteCountMonth || 0) > (merged.quoteCountMonth || 0) && prev.otCreatedMonth === merged.otCreatedMonth) {
+            merged.quoteCountMonth = prev.quoteCountMonth;
+          }
+          localStorage.setItem('tallerlink_billing_v1', JSON.stringify(merged));
+          localStorage.setItem('tl_last_email', String(merged.email).toLowerCase());
+          if (window.TLBillingPaint) window.TLBillingPaint();
+        } catch (_) {}
+      }
       if (fromCloud) {
         try {
           localStorage.setItem('tallerlink_v2', JSON.stringify({
             shop: state.shop,
             ots: state.ots,
             updatedAt: state.dataUpdatedAt,
+            billingEmail: (d.billing && d.billing.email) || getShopEmail() || '',
           }));
         } catch (_) {}
       }
@@ -1110,7 +1125,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email,
-            data: { shop: state.shop, ots: state.ots },
+            data: {
+              shop: state.shop,
+              ots: state.ots,
+              billing: (function () {
+                try { return JSON.parse(localStorage.getItem('tallerlink_billing_v1') || 'null'); }
+                catch (_) { return null; }
+              })(),
+            },
             updatedAt: state.dataUpdatedAt || Date.now(),
             deviceId: getDeviceId(),
             force: !!force,
@@ -1126,6 +1148,7 @@
           applySnapshot({
             shop: data.data.shop,
             ots: data.data.ots,
+            billing: data.data.billing,
             updatedAt: data.updatedAt,
           }, true);
           refreshAll();
@@ -1167,6 +1190,7 @@
           applySnapshot({
             shop: data.data.shop,
             ots: data.data.ots,
+            billing: data.data.billing,
             updatedAt: serverAt,
           }, true);
           const after = JSON.stringify({ o: state.ots.length, s: state.shop.name });
@@ -1188,75 +1212,10 @@
     window.tlCloudPull = cloudPull;
     window.tlCloudPush = cloudPush;
 
-    /* ─── seed demo if empty ─── */
+    /* Demo desactivado: cuentas nuevas empiezan sin vehículos */
     function seedIfEmpty() {
-      if (state.ots.length) return;
-      if (localStorage.getItem('tallerlink_v2_seeded')) return;
-      const demo = [
-        {
-          id: uid(), num: 1, created: Date.now() - 86400000 * 2,
-          customer: 'Carlos Rojas', phone: '', vehicle: 'Toyota RAV4 2019', plate: 'ABC-123',
-          color: 'Plata', km: 82000, fuel: '1/2', reason: 'Frenos delanteros',
-          area: 'mecanica', status: 'mecanica', promise: '', notes: '',
-          quote: {
-            id: uid(), status: 'approved', diagnosis: 'Pastillas y discos delanteros',
-            lines: [
-              { desc: 'Pastillas delanteras', qty: 1, price: 42000 },
-              { desc: 'Discos delanteros (par)', qty: 1, price: 78000 },
-              { desc: 'Mano de obra', qty: 1, price: 35000 },
-            ],
-            currency: 'CRC', taxP: 13, notes: 'Repuestos de calidad. Garantía 3 meses MO.',
-            sub: 155000, tax: 20150, total: 175150,
-          },
-          quotes: [],
-          project: { stages: [], notes: '', currency: 'CRC', taxP: 13 },
-        },
-        {
-          id: uid(), num: 2, created: Date.now() - 86400000,
-          customer: 'María Solano', phone: '', vehicle: 'Hyundai Tucson 2020', plate: 'DEF-456',
-          color: 'Blanco', km: 45000, fuel: '3/4', reason: 'Choque lateral derecho',
-          area: 'mixto', status: 'espera_aprobacion', promise: '', notes: 'Seguro INS',
-          quote: null,
-          quotes: [],
-          project: {
-            stages: [
-              { id: uid(), name: 'Desarme y diagnóstico', amount: 85000 },
-              { id: uid(), name: 'Enderezado puerta y guardafango', amount: 220000 },
-              { id: uid(), name: 'Pintura', amount: 180000 },
-              { id: uid(), name: 'Armado y detalle', amount: 65000 },
-            ],
-            notes: 'Pueden salir adicionales al desarme.',
-            currency: 'CRC', taxP: 13, status: 'sent',
-          },
-        },
-        {
-          id: uid(), num: 3, created: Date.now() - 3600000 * 5,
-          customer: 'Luis Mora', phone: '', vehicle: 'Honda Civic 2018', plate: 'GHI-789',
-          color: 'Negro', km: 110000, fuel: '1/4', reason: 'Servicio mayor + ruido suspensión',
-          area: 'mecanica', status: 'espera_repuestos', promise: '', notes: '',
-          quote: {
-            id: uid(), status: 'approved', diagnosis: 'Amortiguadores delanteros + servicio',
-            lines: [
-              { desc: 'Amortiguadores delanteros', qty: 2, price: 55000 },
-              { desc: 'Kit servicio 100k', qty: 1, price: 48000 },
-              { desc: 'Mano de obra', qty: 1, price: 40000 },
-            ],
-            currency: 'CRC', taxP: 13, notes: '',
-            sub: 198000, tax: 25740, total: 223740,
-          },
-          quotes: [],
-          project: { stages: [], notes: '', currency: 'CRC', taxP: 13 },
-        },
-      ];
-      // fix quotes arrays
-      demo.forEach(o => {
-        if (o.quote) o.quotes = [o.quote];
-        else o.quotes = [];
-      });
-      state.ots = demo;
-      state.shop.name = 'Taller Demo';
-      save();
-      localStorage.setItem('tallerlink_v2_seeded', '1');
+      // Intencionalmente vacío — no cargar carros de demostración
+      return;
     }
 
     /* ─── encoding for public links ─── */

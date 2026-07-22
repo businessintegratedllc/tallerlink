@@ -184,7 +184,20 @@
         if (phone && !raw.shop.phone) raw.shop.phone = phone;
         localStorage.setItem('tallerlink_v2', JSON.stringify(raw));
       } catch (_) {}
+      try { localStorage.setItem('tl_last_email', b.email); } catch (_) {}
       return b;
+    },
+    /** Entrar en este dispositivo con un email ya usado (sin re-registrar todo) */
+    loginWithEmail(email) {
+      const em = String(email || '').trim().toLowerCase();
+      if (!em || !em.includes('@')) return { ok: false, error: 'email' };
+      const b = this.get();
+      b.registered = true;
+      b.email = em;
+      if (!b.ownerName) b.ownerName = em.split('@')[0];
+      saveBilling(b);
+      try { localStorage.setItem('tl_last_email', em); } catch (_) {}
+      return { ok: true, billing: b };
     },
     canCreateOT() {
       const b = this.get();
@@ -434,23 +447,98 @@
         <div class="bill-gate" id="billGate">
           <div class="bill-card">
             <div style="font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ff7a1a">TallerLink</div>
-            <h2>Registrá tu taller</h2>
-            <p class="lead">Creá tu cuenta gratis. Cuando quieras Pro, pagás por <strong>PayPal</strong> en 1 minuto.</p>
-            <label>Tu nombre</label>
-            <input id="regOwner" placeholder="Juan Martínez" autocomplete="name" />
-            <label>Email del taller</label>
-            <input id="regEmail" type="email" placeholder="taller@email.com" autocomplete="email" />
-            <label>WhatsApp</label>
-            <input id="regPhone" placeholder="50688887777" inputmode="tel" autocomplete="tel" />
-            <label>Nombre del taller</label>
-            <input id="regShop" placeholder="Taller Martínez" />
-            <button type="button" class="btn btn-primary btn-block" id="regSubmit" style="margin-top:.35rem">Empezar gratis</button>
+            <h2 id="gateTitle">Entrá a tu taller</h2>
+            <p class="lead" id="gateLead">Si ya te registraste en la computadora o en otro celular, solo poné el <strong>mismo email</strong>. No hace falta crear todo de nuevo.</p>
+
+            <div id="gateLoginBox">
+              <label>Email del taller</label>
+              <input id="loginEmail" type="email" placeholder="taller@email.com" autocomplete="email" />
+              <button type="button" class="btn btn-primary btn-block" id="btnLoginEmail" style="margin-top:.15rem">Entrar con este email</button>
+              <p style="text-align:center;margin:.85rem 0 .35rem;font-size:.8rem;color:#5f6d82">— o —</p>
+              <button type="button" class="btn btn-ghost btn-block" id="btnShowRegister">Crear taller nuevo</button>
+            </div>
+
+            <div id="gateRegisterBox" style="display:none">
+              <label>Tu nombre</label>
+              <input id="regOwner" placeholder="Juan Martínez" autocomplete="name" />
+              <label>Email del taller</label>
+              <input id="regEmail" type="email" placeholder="taller@email.com" autocomplete="email" />
+              <label>WhatsApp</label>
+              <input id="regPhone" placeholder="50688887777" inputmode="tel" autocomplete="tel" />
+              <label>Nombre del taller</label>
+              <input id="regShop" placeholder="Taller Martínez" />
+              <button type="button" class="btn btn-primary btn-block" id="regSubmit" style="margin-top:.35rem">Crear e empezar gratis</button>
+              <button type="button" class="btn btn-ghost btn-block" id="btnShowLogin" style="margin-top:.45rem">Ya tengo cuenta</button>
+            </div>
+
             <p style="font-size:.75rem;color:#5f6d82;margin-top:.85rem;line-height:1.4;text-align:center">
-              Free sin tarjeta. Pro se paga con PayPal.
+              El email une PC y celular. Usá siempre el mismo.
             </p>
           </div>
         </div>`);
       document.body.appendChild(gate);
+
+      const loginBox = gate.querySelector('#gateLoginBox');
+      const regBox = gate.querySelector('#gateRegisterBox');
+      const title = gate.querySelector('#gateTitle');
+      const lead = gate.querySelector('#gateLead');
+
+      gate.querySelector('#btnShowRegister').onclick = () => {
+        loginBox.style.display = 'none';
+        regBox.style.display = 'block';
+        title.textContent = 'Registrá tu taller';
+        lead.innerHTML = 'Creá tu cuenta gratis. Cuando quieras Pro, pagás por <strong>PayPal</strong>.';
+      };
+      gate.querySelector('#btnShowLogin').onclick = () => {
+        regBox.style.display = 'none';
+        loginBox.style.display = 'block';
+        title.textContent = 'Entrá a tu taller';
+        lead.innerHTML = 'Poné el <strong>mismo email</strong> que usaste al registrarte.';
+      };
+
+      async function finishLogin(email, ownerName, phone, shopName, isNew) {
+        if (isNew) {
+          billing.register({ email, ownerName, phone, shopName: shopName || 'Mi Taller' });
+        } else {
+          const r = billing.loginWithEmail(email);
+          if (!r.ok) {
+            alert('Email inválido');
+            return;
+          }
+        }
+        const sn = document.getElementById('sideShopName');
+        if (sn && shopName) sn.textContent = shopName;
+        const shopNameInput = document.getElementById('shopName');
+        if (shopNameInput && shopName) shopNameInput.value = shopName;
+        hideGate();
+        paintBillingUI();
+        if (window.toast) window.toast(isNew ? 'Taller creado · sincronizando…' : 'Entrando · cargando tu taller…');
+        setTimeout(function () {
+          if (typeof window.tlCloudPull === 'function') {
+            window.tlCloudPull({ silent: false }).then(function (r) {
+              if (r && r.changed) {
+                if (window.toast) window.toast('Taller cargado en este teléfono');
+                paintBillingUI();
+              } else if (typeof window.tlCloudPush === 'function') {
+                window.tlCloudPush(true);
+                if (!isNew && window.toast) {
+                  window.toast('Listo. Si no ves carros, tocá ↻ Sync o revisá el email.');
+                }
+              }
+            });
+          }
+        }, 300);
+      }
+
+      gate.querySelector('#btnLoginEmail').onclick = () => {
+        const email = gate.querySelector('#loginEmail').value.trim();
+        if (!email || !email.includes('@')) {
+          alert('Escribí el email con el que te registraste');
+          return;
+        }
+        finishLogin(email, '', '', '', false);
+      };
+
       gate.querySelector('#regSubmit').onclick = () => {
         const ownerName = gate.querySelector('#regOwner').value.trim();
         const email = gate.querySelector('#regEmail').value.trim();
@@ -460,27 +548,24 @@
           alert('Completá nombre y un email válido');
           return;
         }
-        billing.register({ email, ownerName, phone, shopName: shopName || 'Mi Taller' });
-        const sn = document.getElementById('sideShopName');
-        if (sn && shopName) sn.textContent = shopName;
-        const shopNameInput = document.getElementById('shopName');
-        if (shopNameInput && shopName) shopNameInput.value = shopName;
-        hideGate();
-        paintBillingUI();
-        if (window.toast) window.toast('Taller registrado · sincronizando…');
-        // Mismo email en PC y celular = mismos carros (nube)
-        setTimeout(function () {
-          if (typeof window.tlCloudPull === 'function') {
-            window.tlCloudPull({ silent: false }).then(function (r) {
-              if (r && r.changed) {
-                if (window.toast) window.toast('Datos del taller cargados en este dispositivo');
-              } else if (typeof window.tlCloudPush === 'function') {
-                window.tlCloudPush(true);
-              }
-            });
-          }
-        }, 300);
+        finishLogin(email, ownerName, phone, shopName, true);
       };
+
+      // Prefill last email
+      try {
+        const last = localStorage.getItem('tl_last_email') || '';
+        if (last) {
+          gate.querySelector('#loginEmail').value = last;
+          gate.querySelector('#regEmail').value = last;
+        }
+      } catch (_) {}
+    } else {
+      // re-open existing
+      try {
+        const last = localStorage.getItem('tl_last_email') || '';
+        const le = gate.querySelector('#loginEmail');
+        if (le && last && !le.value) le.value = last;
+      } catch (_) {}
     }
     gate.classList.add('show');
   }
@@ -892,7 +977,31 @@
       true
     );
 
-    if (!billing.get().registered) setTimeout(showGate, 400);
+    if (!billing.get().registered) {
+      // Intentar restaurar sesión con último email (misma nube)
+      let last = '';
+      try { last = localStorage.getItem('tl_last_email') || ''; } catch (_) {}
+      if (last && last.includes('@')) {
+        billing.loginWithEmail(last);
+        setTimeout(function () {
+          if (typeof window.tlCloudPull === 'function') {
+            window.tlCloudPull({ silent: true }).then(function (r) {
+              paintBillingUI();
+              if (r && (r.changed || r.ok)) {
+                if (window.toast) window.toast('Sesión restaurada: ' + last);
+              } else {
+                // sin datos en nube aún — igual entrar con email
+                paintBillingUI();
+              }
+            });
+          } else {
+            paintBillingUI();
+          }
+        }, 500);
+      } else {
+        setTimeout(showGate, 400);
+      }
+    }
     setTimeout(hookAppButtons, 0);
     setTimeout(hookAppButtons, 500);
   }
